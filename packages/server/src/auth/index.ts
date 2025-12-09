@@ -6,12 +6,12 @@ export default auth;
 
 let initialized = false;
 
-export function initializeAuth(_dbPath?: string) {
+export function initializeAuth(_dbPath?: string): void {
   if (initialized) return;
   initialized = true;
   console.log('✅ Better Auth initialized');
 }
 
-export function getAuth() {
+export function getAuth(): typeof auth {
   return auth;
 }

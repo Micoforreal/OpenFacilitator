@@ -1,4 +1,4 @@
-import { betterAuth } from 'better-auth';
+import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -11,7 +11,8 @@ if (dir !== '.') {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-const db = new Database(dbPath);
+// Create database connection (typed as any to avoid export type issues)
+const db: any = new Database(dbPath);
 
 // Get trusted origins from environment and defaults
 function getTrustedOrigins(): string[] {
