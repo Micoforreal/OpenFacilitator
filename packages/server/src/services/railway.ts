@@ -4,7 +4,7 @@
  * Railway uses a GraphQL API: https://docs.railway.app/reference/public-api
  */
 
-const RAILWAY_API_URL = 'https://backboard.railway.app/graphql/v2';
+const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 
 interface RailwayConfig {
   apiToken: string;
@@ -57,11 +57,13 @@ async function railwayQuery<T>(query: string, variables: Record<string, unknown>
     variables: JSON.stringify(variables, null, 2),
   });
   
+  // Railway uses different headers based on token type
+  // Project tokens use 'Project-Access-Token', account tokens use 'Authorization: Bearer'
   const response = await fetch(RAILWAY_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiToken}`,
+      'Project-Access-Token': config.apiToken,
     },
     body: JSON.stringify({ query, variables }),
   });
