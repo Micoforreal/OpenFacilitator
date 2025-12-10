@@ -147,5 +147,29 @@ class ApiClient {
   }
 }
 
+  // Domain Management
+  async setupDomain(facilitatorId: string): Promise<{ success: boolean; domain?: string; status?: string; message?: string; error?: string }> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/domain`, {
+      method: 'POST',
+    });
+  }
+
+  async removeDomain(facilitatorId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/domain`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getDomainStatus(facilitatorId: string): Promise<{
+    domain: string;
+    status: 'pending' | 'active' | 'not_added' | 'unconfigured';
+    railwayConfigured: boolean;
+    message?: string;
+    dnsRecords?: { type: string; name: string; value: string }[];
+  }> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/domain/status`);
+  }
+}
+
 export const api = new ApiClient(API_BASE);
 

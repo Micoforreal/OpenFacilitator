@@ -10,6 +10,12 @@ import {
 import { getTransactionsByFacilitator } from '../db/transactions.js';
 import { defaultTokens } from '@openfacilitator/core';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { 
+  addCustomDomain, 
+  removeCustomDomain, 
+  getDomainStatus, 
+  isRailwayConfigured 
+} from '../services/railway.js';
 
 const router: IRouter = Router();
 
@@ -371,6 +377,146 @@ For production:
     });
   } catch (error) {
     console.error('Export facilitator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/domain - Setup custom domain via Railway
+ */
+router.post('/facilitators/:id/domain', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    if (!facilitator.custom_domain) {
+      res.status(400).json({ error: 'No custom domain configured for this facilitator' });
+      return;
+    }
+
+    if (!isRailwayConfigured()) {
+      res.status(503).json({ 
+        error: 'Railway integration not configured',
+        message: 'Set RAILWAY_API_TOKEN, RAILWAY_SERVICE_ID, and RAILWAY_ENVIRONMENT_ID'
+      });
+      return;
+    }
+
+    const result = await addCustomDomain(facilitator.custom_domain);
+    
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      domain: result.domain,
+      status: result.status,
+      message: 'Domain added to Railway. Configure your DNS records.',
+    });
+  } catch (error) {
+    console.error('Setup domain error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/facilitators/:id/domain - Remove custom domain from Railway
+ */
+router.delete('/facilitators/:id/domain', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    if (!facilitator.custom_domain) {
+      res.status(400).json({ error: 'No custom domain configured for this facilitator' });
+      return;
+    }
+
+    if (!isRailwayConfigured()) {
+      res.status(503).json({ error: 'Railway integration not configured' });
+      return;
+    }
+
+    const result = await removeCustomDomain(facilitator.custom_domain);
+    
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({ success: true, message: 'Domain removed from Railway' });
+  } catch (error) {
+    console.error('Remove domain error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/domain/status - Check domain DNS status
+ */
+router.get('/facilitators/:id/domain/status', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    if (!facilitator.custom_domain) {
+      res.status(400).json({ error: 'No custom domain configured for this facilitator' });
+      return;
+    }
+
+    if (!isRailwayConfigured()) {
+      // Return basic status without Railway integration
+      res.json({
+        domain: facilitator.custom_domain,
+        status: 'unconfigured',
+        railwayConfigured: false,
+        dnsRecords: [
+          {
+            type: 'CNAME',
+            name: facilitator.custom_domain,
+            value: 'api.openfacilitator.io',
+          },
+        ],
+      });
+      return;
+    }
+
+    const status = await getDomainStatus(facilitator.custom_domain);
+    
+    if (!status) {
+      res.json({
+        domain: facilitator.custom_domain,
+        status: 'not_added',
+        railwayConfigured: true,
+        message: 'Domain not yet added to Railway. Click "Setup Domain" to add it.',
+        dnsRecords: [
+          {
+            type: 'CNAME',
+            name: facilitator.custom_domain,
+            value: 'api.openfacilitator.io',
+          },
+        ],
+      });
+      return;
+    }
+
+    res.json({
+      ...status,
+      railwayConfigured: true,
+    });
+  } catch (error) {
+    console.error('Get domain status error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

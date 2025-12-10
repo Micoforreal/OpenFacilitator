@@ -15,6 +15,9 @@ import {
   Key,
   Settings,
   ShieldCheck,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,12 +46,27 @@ const networkNames: Record<string | number, string> = {
 export default function FacilitatorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedDns, setCopiedDns] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: facilitator, isLoading } = useQuery({
     queryKey: ['facilitator', id],
     queryFn: () => api.getFacilitator(id),
+  });
+
+  const { data: domainStatus, refetch: refetchDomainStatus } = useQuery({
+    queryKey: ['domainStatus', id],
+    queryFn: () => api.getDomainStatus(id),
+    enabled: !!facilitator?.customDomain,
+    refetchInterval: (data) => (data?.status === 'pending' ? 10000 : false), // Poll every 10s if pending
+  });
+
+  const setupDomainMutation = useMutation({
+    mutationFn: () => api.setupDomain(id),
+    onSuccess: () => {
+      refetchDomainStatus();
+    },
   });
 
   const { data: transactionsData } = useQuery({
@@ -272,7 +290,15 @@ export default function FacilitatorDetailPage() {
                 {facilitator.customDomain && (
                   <div>
                     <Label className="text-muted-foreground">Custom Domain</Label>
-                    <p className="font-mono">{facilitator.customDomain}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-mono">{facilitator.customDomain}</p>
+                      {domainStatus?.status === 'active' && (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      )}
+                      {domainStatus?.status === 'pending' && (
+                        <AlertCircle className="w-4 h-4 text-yellow-500" />
+                      )}
+                    </div>
                   </div>
                 )}
                 <div>
@@ -285,6 +311,130 @@ export default function FacilitatorDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Domain Setup Card - only show if custom domain is configured */}
+            {facilitator.customDomain && (
+              <Card className={domainStatus?.status === 'active' ? 'border-green-500/50' : domainStatus?.status === 'pending' ? 'border-yellow-500/50' : ''}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    Domain Setup
+                    {domainStatus?.status === 'active' && (
+                      <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
+                    )}
+                    {domainStatus?.status === 'pending' && (
+                      <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full">Pending DNS</span>
+                    )}
+                  </CardTitle>
+                  <CardDescription>Configure DNS for your custom domain</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {domainStatus?.status === 'active' ? (
+                    <div className="flex items-center gap-2 text-green-500">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>Domain is active and SSL is provisioned!</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-muted p-4 rounded-lg space-y-3">
+                        <p className="text-sm font-medium">Add this DNS record:</p>
+                        {domainStatus?.dnsRecords?.map((record, i) => (
+                          <div key={i} className="font-mono text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Type:</span>
+                              <span>{record.type}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Name:</span>
+                              <span>{record.name.split('.')[0] || '@'}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-2">
+                              <span className="text-muted-foreground">Value:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="truncate max-w-[150px]">{record.value}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(record.value);
+                                    setCopiedDns(true);
+                                    setTimeout(() => setCopiedDns(false), 2000);
+                                  }}
+                                >
+                                  {copiedDns ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )) || (
+                          <div className="font-mono text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Type:</span>
+                              <span>CNAME</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Name:</span>
+                              <span>{facilitator.customDomain.split('.')[0]}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-2">
+                              <span className="text-muted-foreground">Value:</span>
+                              <div className="flex items-center gap-1">
+                                <span>api.openfacilitator.io</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText('api.openfacilitator.io');
+                                    setCopiedDns(true);
+                                    setTimeout(() => setCopiedDns(false), 2000);
+                                  }}
+                                >
+                                  {copiedDns ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {domainStatus?.status === 'not_added' && domainStatus.railwayConfigured && (
+                          <Button 
+                            onClick={() => setupDomainMutation.mutate()}
+                            disabled={setupDomainMutation.isPending}
+                            className="flex-1"
+                          >
+                            {setupDomainMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Setting up...
+                              </>
+                            ) : (
+                              'Setup Domain'
+                            )}
+                          </Button>
+                        )}
+                        <Button 
+                          variant="outline" 
+                          onClick={() => refetchDomainStatus()}
+                          className="flex-1"
+                        >
+                          Verify DNS
+                        </Button>
+                      </div>
+
+                      {domainStatus?.status === 'pending' && (
+                        <p className="text-xs text-muted-foreground">
+                          DNS changes can take up to 48 hours to propagate. We&apos;ll check automatically.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
