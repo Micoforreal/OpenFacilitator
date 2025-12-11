@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type IRouter } from 'express';
-import { createFacilitator, type FacilitatorConfig, type TokenConfig } from '@openfacilitator/core';
+import { createFacilitator, type FacilitatorConfig, type TokenConfig, getSolanaPublicKey } from '@openfacilitator/core';
 import { z } from 'zod';
 import { requireFacilitator } from '../middleware/tenant.js';
 import { createTransaction, updateTransactionStatus } from '../db/transactions.js';
@@ -48,6 +48,30 @@ router.get('/supported', requireFacilitator, (req: Request, res: Response) => {
 
   const facilitator = createFacilitator(config);
   const supported = facilitator.getSupported();
+
+  // Add feePayer for Solana networks (required by x402-solana library)
+  if (record.encrypted_solana_private_key) {
+    try {
+      const solanaPrivateKey = decryptPrivateKey(record.encrypted_solana_private_key);
+      const solanaFeePayer = getSolanaPublicKey(solanaPrivateKey);
+      
+      // Add feePayer to Solana kinds
+      supported.kinds = supported.kinds.map(kind => {
+        if (kind.network === 'solana' || kind.network === 'solana-mainnet' || kind.network === 'solana-devnet') {
+          return {
+            ...kind,
+            extra: {
+              ...kind.extra,
+              feePayer: solanaFeePayer,
+            },
+          };
+        }
+        return kind;
+      });
+    } catch (e) {
+      console.error('Failed to get Solana fee payer address:', e);
+    }
+  }
 
   res.json(supported);
 });
