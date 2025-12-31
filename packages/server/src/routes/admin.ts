@@ -1077,6 +1077,70 @@ router.get('/facilitators/:id/domain/status', requireAuth, async (req: Request, 
 });
 
 /**
+ * GET /api/admin/facilitators/:id/raw
+ * Get raw facilitator data (temporary admin endpoint)
+ * TODO: Remove after debugging
+ */
+router.get('/facilitators/:id/raw', (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+    // Return raw data without transforming
+    res.json({
+      id: facilitator.id,
+      name: facilitator.name,
+      subdomain: facilitator.subdomain,
+      custom_domain: facilitator.custom_domain,
+      additional_domains: facilitator.additional_domains,
+      owner_address: facilitator.owner_address,
+      supported_chains: facilitator.supported_chains,
+      created_at: facilitator.created_at,
+      updated_at: facilitator.updated_at,
+    });
+  } catch (error) {
+    console.error('Get raw facilitator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PATCH /api/admin/facilitators/:id/domains
+ * Update domains directly (temporary admin endpoint)
+ * TODO: Remove after debugging
+ */
+router.patch('/facilitators/:id/domains', (req: Request, res: Response) => {
+  try {
+    const { custom_domain, additional_domains } = req.body;
+
+    const updates: Record<string, string> = {};
+    if (custom_domain !== undefined) {
+      updates.custom_domain = custom_domain || '';
+    }
+    if (additional_domains !== undefined) {
+      updates.additional_domains = JSON.stringify(additional_domains);
+    }
+
+    const facilitator = updateFacilitator(req.params.id, updates);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      custom_domain: facilitator.custom_domain,
+      additional_domains: facilitator.additional_domains,
+    });
+  } catch (error) {
+    console.error('Update domains error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * DELETE /api/admin/subscriptions/clear
  * Clear all subscriptions (temporary admin endpoint)
  * TODO: Remove this after testing
