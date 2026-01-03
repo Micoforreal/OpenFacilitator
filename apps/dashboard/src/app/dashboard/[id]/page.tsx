@@ -270,7 +270,7 @@ export default function FacilitatorDetailPage() {
                         <div className="w-14 h-14 border-2 border-dashed border-border rounded-lg flex items-center justify-center bg-muted/50">
                           {faviconPreview || faviconData?.favicon ? (
                             <img
-                              src={faviconPreview || faviconData?.favicon}
+                              src={faviconPreview ?? faviconData?.favicon ?? undefined}
                               alt=""
                               className="w-8 h-8 object-contain"
                             />
