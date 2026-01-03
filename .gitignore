@@ -44,3 +44,4 @@ coverage/
 *.tgz
 .cache/
 
+.github/workflows/integration-tests.yml
