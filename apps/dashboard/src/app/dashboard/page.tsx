@@ -99,11 +99,12 @@ function DnsSetupDialog({
   const domain = facilitator?.customDomain || '';
   const subdomain = domain.split('.')[0] || 'x402';
 
-  const { cnameValue, cnameName: apiCnameName, cnameType, isActive, isLoading: isDnsLoading } = useDomainStatus(
+  const { cnameValue, cnameName: apiCnameName, cnameType, isActive, isLoading: isDnsLoading, isNotConfigured, refetch } = useDomainStatus(
     facilitator?.id,
     !!facilitator?.customDomain && open
   );
   const cnameName = apiCnameName || subdomain;
+  const [isSettingUp, setIsSettingUp] = useState(false);
 
   // If domain is already active, close dialog and redirect
   useEffect(() => {
@@ -112,6 +113,28 @@ function DnsSetupDialog({
       onDnsVerified?.();
     }
   }, [open, isActive, facilitator, onOpenChange, onDnsVerified]);
+
+  // If domain not added to Railway yet, automatically set it up
+  useEffect(() => {
+    if (open && isNotConfigured && facilitator && !isSettingUp && !isDnsLoading) {
+      setIsSettingUp(true);
+      api.setupDomain(facilitator.id)
+        .then(() => {
+          refetch();
+        })
+        .catch((err) => {
+          console.error('Failed to setup domain:', err);
+          toast({
+            title: 'Setup Failed',
+            description: 'Could not register domain with Railway. Please try again.',
+            variant: 'destructive',
+          });
+        })
+        .finally(() => {
+          setIsSettingUp(false);
+        });
+    }
+  }, [open, isNotConfigured, facilitator, isSettingUp, isDnsLoading, refetch, toast]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(cnameValue);
@@ -247,11 +270,11 @@ function DnsSetupDialog({
           )}
         </div>
 
-        {isDnsLoading ? (
+        {isDnsLoading || isSettingUp ? (
           <div className="rounded-xl border border-border bg-muted/30 p-5 flex items-center justify-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Loading DNS configuration...
+              {isSettingUp ? 'Setting up domain with Railway...' : 'Loading DNS configuration...'}
             </p>
           </div>
         ) : cnameValue ? (
