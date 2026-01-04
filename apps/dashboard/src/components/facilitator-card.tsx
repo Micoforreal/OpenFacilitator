@@ -7,10 +7,6 @@ import type { Facilitator } from '@/lib/api';
 
 interface FacilitatorCardProps {
   facilitator: Facilitator;
-  stats?: {
-    networksConfigured: number;
-    totalSettled: number;
-  };
   onManageClick?: () => void;
 }
 
@@ -87,7 +83,7 @@ function formatNumber(num: number): string {
   return num.toFixed(2);
 }
 
-export function FacilitatorCard({ facilitator, stats, onManageClick }: FacilitatorCardProps) {
+export function FacilitatorCard({ facilitator, onManageClick }: FacilitatorCardProps) {
   const domain = facilitator.customDomain || facilitator.subdomain;
   const url = facilitator.url;
 
@@ -99,8 +95,8 @@ export function FacilitatorCard({ facilitator, stats, onManageClick }: Facilitat
   };
 
   const status = getStatus();
-  const networksConfigured = stats?.networksConfigured ?? facilitator.supportedChains.length;
-  const totalSettled = stats?.totalSettled ?? 0;
+  const networksConfigured = facilitator.supportedChains.length;
+  const totalSettled = parseFloat(facilitator.stats?.totalSettled || '0');
 
   const handleCardClick = () => {
     onManageClick?.();

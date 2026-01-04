@@ -231,22 +231,30 @@ router.get('/facilitators', requireAuth, async (req: Request, res: Response) => 
     const facilitators = getFacilitatorsByOwner(ownerAddress);
 
     res.json(
-      facilitators.map((f) => ({
-        id: f.id,
-        name: f.name,
-        subdomain: f.subdomain,
-        customDomain: f.custom_domain,
-        additionalDomains: JSON.parse(f.additional_domains || '[]'),
-        ownerAddress: f.owner_address,
-        supportedChains: JSON.parse(f.supported_chains),
-        supportedTokens: JSON.parse(f.supported_tokens),
-        url: f.custom_domain
-          ? `https://${f.custom_domain}`
-          : `https://${f.subdomain}.openfacilitator.io`,
-        favicon: f.favicon || null,
-        createdAt: formatSqliteDate(f.created_at),
-        updatedAt: formatSqliteDate(f.updated_at),
-      }))
+      facilitators.map((f) => {
+        const stats = getTransactionStats(f.id);
+        return {
+          id: f.id,
+          name: f.name,
+          subdomain: f.subdomain,
+          customDomain: f.custom_domain,
+          additionalDomains: JSON.parse(f.additional_domains || '[]'),
+          ownerAddress: f.owner_address,
+          supportedChains: JSON.parse(f.supported_chains),
+          supportedTokens: JSON.parse(f.supported_tokens),
+          url: f.custom_domain
+            ? `https://${f.custom_domain}`
+            : `https://${f.subdomain}.openfacilitator.io`,
+          favicon: f.favicon || null,
+          stats: {
+            totalSettled: stats.totalAmountSettled,
+            totalVerifications: stats.verified,
+            totalSettlements: stats.settled,
+          },
+          createdAt: formatSqliteDate(f.created_at),
+          updatedAt: formatSqliteDate(f.updated_at),
+        };
+      })
     );
   } catch (error) {
     console.error('List facilitators error:', error);

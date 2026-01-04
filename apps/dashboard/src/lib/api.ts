@@ -11,6 +11,11 @@ export interface Facilitator {
   supportedTokens: TokenConfig[];
   url: string;
   favicon?: string | null;
+  stats?: {
+    totalSettled: string;
+    totalVerifications: number;
+    totalSettlements: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
