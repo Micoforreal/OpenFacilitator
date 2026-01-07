@@ -188,4 +188,11 @@ router.get('/stats/price', (_req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET /favicon.ico - Serve OpenFacilitator favicon for API domain
+ */
+router.get('/favicon.ico', (_req: Request, res: Response) => {
+  res.redirect('https://openfacilitator.io/favicon.ico');
+});
+
 export { router as statsRouter };
