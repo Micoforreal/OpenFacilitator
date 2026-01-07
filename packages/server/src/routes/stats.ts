@@ -11,71 +11,91 @@ const router: IRouter = Router();
 
 // Configuration
 const STATS_PRICE_ATOMIC = '5000000'; // $5 USDC (6 decimals)
-const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Facilitator endpoint (pay.openfacilitator.io is a registered facilitator)
+// Solana config
+const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const SOLANA_TREASURY = 'EnjogokdsxF7aK4bQ1KdJwzKbWePSpwKSHDgPy16GBuT';
+const SOLANA_FEE_PAYER = 'Hbe1vdFs4EQVVAzcV12muHhr6DEKwrT9roMXGPLxLBLP';
+
+// Base config
+const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const BASE_TREASURY = '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce';
+
+// Facilitator endpoint
 const FACILITATOR_URL = 'https://pay.openfacilitator.io';
 
-// Payment recipient - treasury address for stats revenue
-const STATS_PAY_TO = 'EnjogokdsxF7aK4bQ1KdJwzKbWePSpwKSHDgPy16GBuT';
-
-// Fee payer - facilitator's gas wallet (pays Solana tx fees)
-const FEE_PAYER = 'Hbe1vdFs4EQVVAzcV12muHhr6DEKwrT9roMXGPLxLBLP';
-
-/**
- * Build payment requirements for the stats endpoint
- */
-function getPaymentRequirements() {
-  return {
-    scheme: 'exact',
-    network: 'solana',
-    maxAmountRequired: STATS_PRICE_ATOMIC,
-    resource: 'https://api.openfacilitator.io/stats',
-    asset: USDC_SOLANA_MINT,
-    payTo: STATS_PAY_TO,
-    description: 'OpenFacilitator Platform Statistics - $5 per request',
-    extra: {
-      feePayer: FEE_PAYER,
-    },
-    outputSchema: {
+// Shared output schema for stats response
+const OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    paymentTxHash: { type: 'string' },
+    timestamp: { type: 'string' },
+    stats: {
       type: 'object',
       properties: {
-        success: { type: 'boolean' },
-        paymentTxHash: { type: 'string' },
-        timestamp: { type: 'string' },
-        stats: {
+        global: {
           type: 'object',
           properties: {
-            global: {
-              type: 'object',
-              properties: {
-                totalTransactionsAllTime: { type: 'number' },
-                totalTransactions24h: { type: 'number' },
-                volumeUsdAllTime: { type: 'string' },
-                volumeUsd24h: { type: 'string' },
-                uniqueWallets: { type: 'number' },
-              },
-            },
-            facilitators: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  subdomain: { type: 'string' },
-                  transactionCount: { type: 'number' },
-                  volumeUsd: { type: 'string' },
-                  uniqueWallets: { type: 'number' },
-                },
-              },
+            totalTransactionsAllTime: { type: 'number' },
+            totalTransactions24h: { type: 'number' },
+            volumeUsdAllTime: { type: 'string' },
+            volumeUsd24h: { type: 'string' },
+            uniqueWallets: { type: 'number' },
+          },
+        },
+        facilitators: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              subdomain: { type: 'string' },
+              transactionCount: { type: 'number' },
+              volumeUsd: { type: 'string' },
+              uniqueWallets: { type: 'number' },
             },
           },
         },
       },
     },
-  };
+  },
+};
+
+/**
+ * Build payment requirements for the stats endpoint (both networks)
+ */
+function getPaymentRequirements() {
+  return [
+    // Solana option
+    {
+      scheme: 'exact',
+      network: 'solana',
+      maxAmountRequired: STATS_PRICE_ATOMIC,
+      resource: 'https://api.openfacilitator.io/stats',
+      asset: USDC_SOLANA_MINT,
+      payTo: SOLANA_TREASURY,
+      description: 'OpenFacilitator Platform Statistics - $5 per request',
+      extra: {
+        feePayer: SOLANA_FEE_PAYER,
+      },
+      outputSchema: OUTPUT_SCHEMA,
+    },
+    // Base option
+    {
+      scheme: 'exact',
+      network: 'base',
+      maxAmountRequired: STATS_PRICE_ATOMIC,
+      resource: 'https://api.openfacilitator.io/stats',
+      asset: USDC_BASE,
+      payTo: BASE_TREASURY,
+      description: 'OpenFacilitator Platform Statistics - $5 per request',
+      outputSchema: OUTPUT_SCHEMA,
+    },
+  ];
 }
+
 
 /**
  * GET /stats - Platform statistics (x402 protected)
@@ -88,9 +108,9 @@ router.get('/stats', async (req: Request, res: Response) => {
   if (!paymentHeader) {
     res.status(402).json({
       x402Version: 1,
-      accepts: [requirements],
+      accepts: requirements,
       error: 'Payment Required',
-      message: 'This endpoint requires a $5 USDC payment via x402',
+      message: 'This endpoint requires a $5 USDC payment via x402 (Solana or Base)',
     });
     return;
   }
@@ -130,7 +150,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       res.status(402).json({
         error: 'Payment verification failed',
         reason: verifyResult.invalidReason || 'Unknown verification error',
-        accepts: [requirements],
+        accepts: requirements,
       });
       return;
     }
@@ -156,7 +176,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       res.status(402).json({
         error: 'Payment settlement failed',
         reason: settleResult.errorMessage || 'Unknown settlement error',
-        accepts: [requirements],
+        accepts: requirements,
       });
       return;
     }
@@ -184,13 +204,20 @@ router.get('/stats', async (req: Request, res: Response) => {
  */
 router.get('/stats/price', (_req: Request, res: Response) => {
   res.json({
-    price: {
-      amount: STATS_PRICE_ATOMIC,
-      amountUsd: '5.00',
-      asset: USDC_SOLANA_MINT,
-      network: 'solana',
-    },
-    payTo: STATS_PAY_TO,
+    priceUsd: '5.00',
+    priceAtomic: STATS_PRICE_ATOMIC,
+    networks: [
+      {
+        network: 'solana',
+        asset: USDC_SOLANA_MINT,
+        payTo: SOLANA_TREASURY,
+      },
+      {
+        network: 'base',
+        asset: USDC_BASE,
+        payTo: BASE_TREASURY,
+      },
+    ],
   });
 });
 
