@@ -238,6 +238,14 @@ router.get('/.well-known/x402-verification.json', (_req: Request, res: Response)
 });
 
 /**
+ * GET /.well-known/x402watch.txt - Domain verification for x402watch
+ */
+router.get('/.well-known/x402watch.txt', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send('6142d507013540b1a88d478c53854394');
+});
+
+/**
  * GET /favicon.ico - Serve OpenFacilitator icon for API domain
  */
 router.get('/favicon.ico', (_req: Request, res: Response) => {
