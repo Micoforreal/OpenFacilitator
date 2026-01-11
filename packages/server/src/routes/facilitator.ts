@@ -375,54 +375,249 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
 // Instead, we look up the facilitator from the payment link.
 
 /**
- * GET /pay/:linkId - Serve the payment page
+ * GET /pay/:linkId - Serve the payment page (HTML) or handle x402 protocol (JSON)
+ *
+ * Content negotiation:
+ * - Accept: text/html (or browser) → renders payment UI
+ * - Accept: application/json (or X-Payment header) → x402 protocol
+ *
+ * x402 flow:
+ * - No X-Payment header → 402 with payment requirements
+ * - With X-Payment header → verify, settle, record payment, return success
  */
 router.get('/pay/:linkId', async (req: Request, res: Response) => {
-  // Set CSP headers to allow inline scripts and external dependencies
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openfacilitator.io https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.solana.com https://*.helius-rpc.com https://*.helius.xyz https://*.quicknode.com https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self';"
-  );
-
   const link = getPaymentLinkById(req.params.linkId);
+  const acceptHeader = req.get('Accept') || '';
+  const paymentHeader = req.get('X-Payment');
+  const wantsJson = acceptHeader.includes('application/json') || paymentHeader;
 
+  // Handle not found
   if (!link) {
-    res.status(404).send(`
-      <!DOCTYPE html>
-      <html><head><title>Not Found</title></head>
-      <body style="font-family: system-ui; text-align: center; padding: 50px;">
-        <h1>Payment Link Not Found</h1>
-        <p>This payment link doesn't exist or has been deleted.</p>
-      </body></html>
-    `);
+    if (wantsJson) {
+      res.status(404).json({ error: 'Payment link not found' });
+    } else {
+      res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><title>Not Found</title></head>
+        <body style="font-family: system-ui; text-align: center; padding: 50px;">
+          <h1>Payment Link Not Found</h1>
+          <p>This payment link doesn't exist or has been deleted.</p>
+        </body></html>
+      `);
+    }
     return;
   }
 
   const record = getFacilitatorById(link.facilitator_id);
 
   if (!record) {
-    res.status(404).send(`
-      <!DOCTYPE html>
-      <html><head><title>Not Found</title></head>
-      <body style="font-family: system-ui; text-align: center; padding: 50px;">
-        <h1>Facilitator Not Found</h1>
-        <p>The facilitator for this payment link no longer exists.</p>
-      </body></html>
-    `);
+    if (wantsJson) {
+      res.status(404).json({ error: 'Facilitator not found' });
+    } else {
+      res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><title>Not Found</title></head>
+        <body style="font-family: system-ui; text-align: center; padding: 50px;">
+          <h1>Facilitator Not Found</h1>
+          <p>The facilitator for this payment link no longer exists.</p>
+        </body></html>
+      `);
+    }
     return;
   }
 
   if (!link.active) {
-    res.status(410).send(`
-      <!DOCTYPE html>
-      <html><head><title>Inactive</title></head>
-      <body style="font-family: system-ui; text-align: center; padding: 50px;">
-        <h1>Payment Link Inactive</h1>
-        <p>This payment link is no longer active.</p>
-      </body></html>
-    `);
+    if (wantsJson) {
+      res.status(410).json({ error: 'Payment link is inactive' });
+    } else {
+      res.status(410).send(`
+        <!DOCTYPE html>
+        <html><head><title>Inactive</title></head>
+        <body style="font-family: system-ui; text-align: center; padding: 50px;">
+          <h1>Payment Link Inactive</h1>
+          <p>This payment link is no longer active.</p>
+        </body></html>
+      `);
+    }
     return;
   }
+
+  // === x402 Protocol Handler ===
+  if (wantsJson) {
+    // Build facilitator URL
+    const facilitatorUrl = record.custom_domain
+      ? `https://${record.custom_domain}`
+      : `https://${record.subdomain}.openfacilitator.io`;
+
+    // Check if this is a Solana network
+    const isSolanaNetwork = link.network === 'solana' ||
+                            link.network === 'solana-mainnet' ||
+                            link.network === 'solana-devnet' ||
+                            link.network.startsWith('solana:');
+
+    // Build payment requirements
+    const paymentRequirements: Record<string, unknown> = {
+      scheme: 'exact',
+      network: link.network,
+      maxAmountRequired: link.amount,
+      asset: link.asset,
+      payTo: link.pay_to_address,
+      description: link.description || link.name,
+      resource: `https://${record.custom_domain || record.subdomain + '.openfacilitator.io'}/pay/${link.id}`,
+    };
+
+    // For Solana, add fee payer
+    if (isSolanaNetwork && record.encrypted_solana_private_key) {
+      try {
+        const solanaPrivateKey = decryptPrivateKey(record.encrypted_solana_private_key);
+        const solanaFeePayer = getSolanaPublicKey(solanaPrivateKey);
+        paymentRequirements.extra = { feePayer: solanaFeePayer };
+      } catch (e) {
+        console.error('Failed to get Solana fee payer:', e);
+        res.status(500).json({ error: 'Solana wallet not configured properly' });
+        return;
+      }
+    } else if (isSolanaNetwork) {
+      res.status(500).json({ error: 'Solana wallet not configured for this facilitator' });
+      return;
+    }
+
+    // No payment provided - return 402 with requirements
+    if (!paymentHeader) {
+      res.status(402).json({
+        x402Version: 1,
+        accepts: [paymentRequirements],
+        error: 'Payment Required',
+        message: link.description || link.name,
+      });
+      return;
+    }
+
+    // Payment provided - verify and settle
+    try {
+      // Decode payment payload
+      let paymentPayload: unknown;
+      try {
+        const decoded = Buffer.from(paymentHeader, 'base64').toString('utf-8');
+        paymentPayload = JSON.parse(decoded);
+      } catch {
+        res.status(400).json({ error: 'Invalid X-Payment header encoding' });
+        return;
+      }
+
+      // Verify payment with facilitator
+      const verifyResponse = await fetch(`${facilitatorUrl}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          x402Version: 1,
+          paymentPayload,
+          paymentRequirements,
+        }),
+      });
+
+      const verifyResult = (await verifyResponse.json()) as {
+        valid?: boolean;
+        invalidReason?: string;
+        payer?: string;
+      };
+
+      if (!verifyResult.valid) {
+        res.status(402).json({
+          error: 'Payment verification failed',
+          reason: verifyResult.invalidReason,
+          accepts: [paymentRequirements],
+        });
+        return;
+      }
+
+      // Settle payment
+      const settleResponse = await fetch(`${facilitatorUrl}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          x402Version: 1,
+          paymentPayload,
+          paymentRequirements,
+        }),
+      });
+
+      const settleResult = (await settleResponse.json()) as {
+        success?: boolean;
+        transactionHash?: string;
+        errorMessage?: string;
+        payer?: string;
+      };
+
+      if (!settleResult.success) {
+        res.status(402).json({
+          error: 'Payment settlement failed',
+          reason: settleResult.errorMessage,
+          accepts: [paymentRequirements],
+        });
+        return;
+      }
+
+      // Record the payment
+      const payment = createPaymentLinkPayment({
+        payment_link_id: link.id,
+        payer_address: settleResult.payer || verifyResult.payer || 'unknown',
+        amount: link.amount,
+        transaction_hash: settleResult.transactionHash,
+        status: 'success',
+      });
+
+      // Fire webhook if configured
+      const webhookUrl = link.webhook_url || record.webhook_url;
+      const webhookSecret = link.webhook_secret || record.webhook_secret;
+
+      if (webhookUrl && webhookSecret && settleResult.transactionHash) {
+        const webhookPayload = {
+          event: 'payment_link.payment' as const,
+          facilitatorId: record.id,
+          paymentLinkId: link.id,
+          paymentLinkName: link.name,
+          timestamp: new Date().toISOString(),
+          payment: {
+            id: payment.id,
+            payerAddress: settleResult.payer || verifyResult.payer || 'unknown',
+            amount: link.amount,
+            asset: link.asset,
+            network: link.network,
+            transactionHash: settleResult.transactionHash,
+          },
+        };
+
+        deliverWebhook(webhookUrl, webhookSecret, webhookPayload, 3).catch((err) => {
+          console.error('Payment link webhook delivery failed:', err);
+        });
+      }
+
+      // Return success with payment details
+      res.json({
+        success: true,
+        transactionHash: settleResult.transactionHash,
+        paymentId: payment.id,
+        message: 'Payment successful',
+      });
+      return;
+
+    } catch (error) {
+      console.error('[x402 Payment] Error:', error);
+      res.status(500).json({
+        error: 'Payment processing error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return;
+    }
+  }
+
+  // === HTML Payment Page ===
+  // Set CSP headers for the HTML page
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openfacilitator.io https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.solana.com https://*.helius-rpc.com https://*.helius.xyz https://*.quicknode.com https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self';"
+  );
 
   // Format amount for display
   const amountNum = parseFloat(link.amount) / 1e6;

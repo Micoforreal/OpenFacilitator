@@ -14,6 +14,8 @@ import {
   Pencil,
   ToggleLeft,
   ToggleRight,
+  Code,
+  Terminal,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,8 +82,11 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isApiOpen, setIsApiOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<PaymentLink | null>(null);
+  const [apiLink, setApiLink] = useState<PaymentLink | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -154,6 +159,17 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     navigator.clipboard.writeText(link.url);
     setCopiedId(link.id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const openApiDialog = (link: PaymentLink) => {
+    setApiLink(link);
+    setIsApiOpen(true);
+  };
+
+  const copyCode = (code: string, id: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   const openEditDialog = (link: PaymentLink) => {
@@ -403,6 +419,10 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openApiDialog(link)}>
+                        <Code className="w-4 h-4 mr-2" />
+                        API / x402
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => openEditDialog(link)}>
                         <Pencil className="w-4 h-4 mr-2" />
                         Edit
@@ -554,6 +574,133 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* API / x402 Dialog */}
+      <Dialog open={isApiOpen} onOpenChange={(open) => {
+        setIsApiOpen(open);
+        if (!open) setApiLink(null);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Terminal className="w-5 h-5" />
+              API Access
+            </DialogTitle>
+            <DialogDescription>
+              Access this payment link programmatically via the x402 protocol.
+            </DialogDescription>
+          </DialogHeader>
+          {apiLink && (
+            <div className="space-y-6 py-4">
+              {/* Human-friendly URL */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  Browser / Human URL
+                </Label>
+                <div className="flex gap-2">
+                  <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono break-all">
+                    {apiLink.url}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyCode(apiLink.url, 'human-url')}
+                  >
+                    {copiedCode === 'human-url' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Opens a payment page where users can connect their wallet and pay.
+                </p>
+              </div>
+
+              {/* x402 API */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Code className="w-4 h-4" />
+                  x402 Protocol (Agent-friendly)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Same URL, but with <code className="px-1 py-0.5 bg-muted rounded">Accept: application/json</code> header.
+                  Returns 402 with payment requirements, or processes payment if <code className="px-1 py-0.5 bg-muted rounded">X-Payment</code> header is provided.
+                </p>
+
+                {/* Get requirements curl */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">Get payment requirements:</div>
+                  <div className="relative">
+                    <pre className="px-3 py-2 bg-zinc-900 text-zinc-100 rounded-md text-xs font-mono overflow-x-auto">
+{`curl -X GET "${apiLink.url}" \\
+  -H "Accept: application/json"`}
+                    </pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1 right-1 h-6 w-6 p-0"
+                      onClick={() => copyCode(`curl -X GET "${apiLink.url}" -H "Accept: application/json"`, 'curl-get')}
+                    >
+                      {copiedCode === 'curl-get' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Response example */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">Response (402 Payment Required):</div>
+                  <pre className="px-3 py-2 bg-zinc-900 text-zinc-100 rounded-md text-xs font-mono overflow-x-auto max-h-40">
+{`{
+  "x402Version": 1,
+  "accepts": [{
+    "scheme": "exact",
+    "network": "${apiLink.network}",
+    "maxAmountRequired": "${apiLink.amount}",
+    "asset": "${apiLink.asset}",
+    "payTo": "${apiLink.payToAddress}",
+    "description": "${apiLink.description || apiLink.name}"
+  }],
+  "error": "Payment Required"
+}`}
+                  </pre>
+                </div>
+
+                {/* Submit payment curl */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">Submit payment (with signed payload):</div>
+                  <div className="relative">
+                    <pre className="px-3 py-2 bg-zinc-900 text-zinc-100 rounded-md text-xs font-mono overflow-x-auto">
+{`curl -X GET "${apiLink.url}" \\
+  -H "Accept: application/json" \\
+  -H "X-Payment: <base64-encoded-signed-payload>"`}
+                    </pre>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1 right-1 h-6 w-6 p-0"
+                      onClick={() => copyCode(`curl -X GET "${apiLink.url}" -H "Accept: application/json" -H "X-Payment: <base64-encoded-signed-payload>"`, 'curl-pay')}
+                    >
+                      {copiedCode === 'curl-pay' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Documentation link */}
+              <div className="pt-2 border-t">
+                <a
+                  href="https://github.com/rawgroundbeef/openfacilitator"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                >
+                  View source on GitHub
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
