@@ -1449,107 +1449,62 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         // Get payment requirements
         const reqRes = await fetch('/pay/' + LINK_ID + '/requirements');
         if (!reqRes.ok) throw new Error('Failed to get payment requirements');
-        const { paymentRequirements, facilitatorUrl } = await reqRes.json();
+        const { paymentRequirements } = await reqRes.json();
 
-        // Create ERC-3009 authorization
-        const deadline = Math.floor(Date.now() / 1000) + 3600;
-        const nonce = '0x' + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
+        // Build ERC-20 transfer call data
+        // transfer(address to, uint256 amount) selector: 0xa9059cbb
+        const toAddress = paymentRequirements.payTo.slice(2).padStart(64, '0');
+        const amountHex = BigInt(AMOUNT).toString(16).padStart(64, '0');
+        const transferData = '0xa9059cbb' + toAddress + amountHex;
 
-        // The domain and types for ERC-3009 TransferWithAuthorization
-        // Base USDC uses 'USDC' as domain name, Ethereum mainnet uses 'USD Coin'
-        const domain = {
-          name: 'USDC',
-          version: '2',
-          chainId: NETWORK === 'base' ? 8453 : 84532,
-          verifyingContract: ASSET
-        };
+        setLoading(true, 'Confirm in wallet...');
 
-        const types = {
-          EIP712Domain: [
-            { name: 'name', type: 'string' },
-            { name: 'version', type: 'string' },
-            { name: 'chainId', type: 'uint256' },
-            { name: 'verifyingContract', type: 'address' }
-          ],
-          TransferWithAuthorization: [
-            { name: 'from', type: 'address' },
-            { name: 'to', type: 'address' },
-            { name: 'value', type: 'uint256' },
-            { name: 'validAfter', type: 'uint256' },
-            { name: 'validBefore', type: 'uint256' },
-            { name: 'nonce', type: 'bytes32' }
-          ]
-        };
-
-        const message = {
-          from: userAddress,
-          to: paymentRequirements.payTo,
-          value: String(AMOUNT),
-          validAfter: '0',
-          validBefore: String(deadline),
-          nonce: nonce
-        };
-
-        setLoading(true, 'Waiting for signature...');
-
-        // Sign with EIP-712
-        const signature = await window.ethereum.request({
-          method: 'eth_signTypedData_v4',
-          params: [userAddress, JSON.stringify({ domain, types, primaryType: 'TransferWithAuthorization', message })]
+        // Send transaction directly - user pays gas
+        const txHash = await window.ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: userAddress,
+            to: ASSET,
+            data: transferData,
+          }]
         });
 
-        // Build payment payload
-        const paymentPayload = {
-          x402Version: 1,
-          scheme: 'exact',
-          network: paymentRequirements.network,
-          payload: {
-            signature,
-            authorization: {
-              from: userAddress,
-              to: paymentRequirements.payTo,
-              value: AMOUNT,
-              validAfter: '0',
-              validBefore: String(deadline),
-              nonce: nonce
-            }
-          }
-        };
+        setLoading(true, 'Waiting for confirmation...');
 
-        setLoading(true, 'Processing payment...');
+        // Poll for transaction receipt
+        let receipt = null;
+        for (let i = 0; i < 60; i++) {
+          receipt = await window.ethereum.request({
+            method: 'eth_getTransactionReceipt',
+            params: [txHash]
+          });
+          if (receipt) break;
+          await new Promise(r => setTimeout(r, 2000));
+        }
 
-        // Submit to facilitator
-        const settleRes = await fetch(facilitatorUrl + '/settle', {
+        if (!receipt) {
+          throw new Error('Transaction not confirmed in time');
+        }
+
+        if (receipt.status !== '0x1') {
+          throw new Error('Transaction failed');
+        }
+
+        // Record the payment
+        await fetch('/pay/' + LINK_ID + '/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            x402Version: 1,
-            paymentPayload: btoa(JSON.stringify(paymentPayload)),
-            paymentRequirements
+            payerAddress: userAddress,
+            transactionHash: txHash,
+            metadata: Object.keys(METADATA).length > 0 ? METADATA : undefined
           })
         });
 
-        const settleResult = await settleRes.json();
+        showStatus('Payment successful!', 'success');
 
-        if (settleResult.success) {
-          // Record the payment
-          await fetch('/pay/' + LINK_ID + '/complete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              payerAddress: userAddress,
-              transactionHash: settleResult.transactionHash,
-              metadata: Object.keys(METADATA).length > 0 ? METADATA : undefined
-            })
-          });
-
-          showStatus('Payment successful!', 'success');
-
-          if (SUCCESS_REDIRECT) {
-            setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
-          }
-        } else {
-          throw new Error(settleResult.errorMessage || 'Payment failed');
+        if (SUCCESS_REDIRECT) {
+          setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
         }
       } catch (err) {
         console.error('Payment error:', err);
