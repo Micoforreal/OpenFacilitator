@@ -252,6 +252,21 @@ export async function executeERC3009Settlement(
     const { v, r, s } = parseSignature(signature);
     console.log('[ERC3009Settlement] Parsed signature: v=%d, r=%s, s=%s', Number(v), r, s);
 
+    // Log the exact values being encoded
+    console.log('[ERC3009Settlement] Encoding with values:', {
+      from: authorization.from,
+      to: authorization.to,
+      value: authorization.value,
+      valueBigInt: BigInt(authorization.value).toString(),
+      validAfter: authorization.validAfter,
+      validBefore: authorization.validBefore,
+      nonce: authorization.nonce,
+      nonceLength: authorization.nonce.length,
+      v: Number(v),
+      r,
+      s,
+    });
+
     // Encode function data - using transferWithAuthorization (can be called by anyone)
     const data = encodeFunctionData({
       abi: TRANSFER_WITH_AUTHORIZATION_ABI,
@@ -268,6 +283,8 @@ export async function executeERC3009Settlement(
         s,
       ],
     });
+
+    console.log('[ERC3009Settlement] Encoded function data (first 200 chars):', data.substring(0, 200));
 
     // Get current gas price
     const gasPrice = await publicClient.getGasPrice();
