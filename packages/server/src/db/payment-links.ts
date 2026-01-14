@@ -9,6 +9,7 @@ export function createPaymentLink(data: {
   facilitator_id: string;
   name: string;
   description?: string;
+  image_url?: string;
   slug?: string;
   link_type?: 'payment' | 'redirect' | 'proxy';
   amount: string;
@@ -28,8 +29,8 @@ export function createPaymentLink(data: {
   const slug = data.slug || id; // Default to ID if no slug provided
 
   const stmt = db.prepare(`
-    INSERT INTO payment_links (id, facilitator_id, name, description, slug, link_type, amount, asset, network, pay_to_address, success_redirect_url, method, headers_forward, access_ttl, webhook_id, webhook_url, webhook_secret)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO payment_links (id, facilitator_id, name, description, image_url, slug, link_type, amount, asset, network, pay_to_address, success_redirect_url, method, headers_forward, access_ttl, webhook_id, webhook_url, webhook_secret)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -37,6 +38,7 @@ export function createPaymentLink(data: {
     data.facilitator_id,
     data.name,
     data.description || null,
+    data.image_url || null,
     slug,
     data.link_type || 'payment',
     data.amount,
@@ -122,6 +124,7 @@ export function updatePaymentLink(
   updates: Partial<{
     name: string;
     description: string | null;
+    image_url: string | null;
     slug: string;
     link_type: 'payment' | 'redirect' | 'proxy';
     amount: string;
@@ -150,6 +153,10 @@ export function updatePaymentLink(
   if (updates.description !== undefined) {
     fields.push('description = ?');
     values.push(updates.description);
+  }
+  if (updates.image_url !== undefined) {
+    fields.push('image_url = ?');
+    values.push(updates.image_url);
   }
   if (updates.slug !== undefined) {
     fields.push('slug = ?');

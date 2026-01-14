@@ -1,6 +1,6 @@
 /**
  * ERC-3009 (transferWithAuthorization / receiveWithAuthorization) implementation
- * 
+ *
  * This is used for gasless USDC transfers where the payer signs an authorization
  * and the facilitator submits the transaction.
  */
@@ -15,6 +15,45 @@ import {
   parseSignature,
   defineChain,
 } from 'viem';
+
+/**
+ * In-memory nonce deduplication cache
+ * Tracks nonces that are currently being processed to prevent double-submissions
+ * Key: `${chainId}:${from}:${nonce}` - Value: timestamp when added
+ */
+const processingNonces = new Map<string, number>();
+
+// Clean up old entries every 5 minutes (nonces older than 10 minutes are removed)
+const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of processingNonces.entries()) {
+    if (now - timestamp > NONCE_TTL_MS) {
+      processingNonces.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+/**
+ * Check if a nonce is already being processed and mark it if not
+ * Returns true if nonce is new (not a duplicate), false if duplicate
+ */
+function tryAcquireNonce(chainId: number, from: string, nonce: string): boolean {
+  const key = `${chainId}:${from.toLowerCase()}:${nonce.toLowerCase()}`;
+  if (processingNonces.has(key)) {
+    return false; // Duplicate
+  }
+  processingNonces.set(key, Date.now());
+  return true;
+}
+
+/**
+ * Release a nonce from the processing cache (call after tx completes or fails)
+ */
+function releaseNonce(chainId: number, from: string, nonce: string): void {
+  const key = `${chainId}:${from.toLowerCase()}:${nonce.toLowerCase()}`;
+  processingNonces.delete(key);
+}
 import { privateKeyToAccount } from 'viem/accounts';
 import { 
   avalanche, 
@@ -171,9 +210,19 @@ export async function executeERC3009Settlement(
     validBefore: authorization.validBefore,
   });
 
+  // Deduplication: prevent double-submission of same nonce
+  if (!tryAcquireNonce(chainId, authorization.from, authorization.nonce)) {
+    console.warn('[ERC3009Settlement] DUPLICATE BLOCKED: Nonce already being processed:', authorization.nonce);
+    return {
+      success: false,
+      errorMessage: 'Duplicate submission: this authorization is already being processed',
+    };
+  }
+
   // Get chain config
   const config = chainConfigs[chainId];
   if (!config) {
+    releaseNonce(chainId, authorization.from, authorization.nonce);
     return {
       success: false,
       errorMessage: `Unsupported chain ID: ${chainId}`,
@@ -228,6 +277,7 @@ export async function executeERC3009Settlement(
     
     if (ethBalance < 100000n * gasPrice) {
       console.error('[ERC3009Settlement] Insufficient ETH for gas!');
+      releaseNonce(chainId, authorization.from, authorization.nonce);
       return {
         success: false,
         errorMessage: 'Facilitator has insufficient ETH for gas',
@@ -282,6 +332,8 @@ export async function executeERC3009Settlement(
   } catch (error) {
     console.error('[ERC3009Settlement] Error:', error);
     const errMsg = error instanceof Error ? error.message : 'Unknown error during settlement';
+    // Release nonce on error so user can retry with same auth if it wasn't submitted
+    releaseNonce(chainId, authorization.from, authorization.nonce);
     return {
       success: false,
       errorMessage: errMsg,

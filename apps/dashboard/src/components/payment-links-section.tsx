@@ -103,6 +103,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   const [headersForward, setHeadersForward] = useState('');
   const [accessTtl, setAccessTtl] = useState(0); // 0 = pay per visit
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['payment-links', facilitatorId],
@@ -130,6 +131,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         accessTtl,
         webhookId: selectedWebhookId || undefined,
+        imageUrl: imageUrl || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-links', facilitatorId] });
@@ -169,6 +171,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setHeadersForward('');
     setAccessTtl(0);
     setSelectedWebhookId(null);
+    setImageUrl('');
   };
 
   const handleNetworkChange = (newNetwork: string) => {
@@ -211,6 +214,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setHeadersForward(link.headersForward?.join(', ') || '');
     setAccessTtl(link.accessTtl || 0);
     setSelectedWebhookId(link.webhookId);
+    setImageUrl(link.imageUrl || '');
     setIsEditOpen(true);
   };
 
@@ -232,6 +236,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         accessTtl,
         webhookId: selectedWebhookId,
+        imageUrl: imageUrl || null,
       },
     });
   };
@@ -347,6 +352,19 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       onChange={(e) => setDescription(e.target.value)}
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imageUrl">Image URL (optional)</Label>
+                  <Input
+                    id="imageUrl"
+                    type="url"
+                    placeholder="https://example.com/product-image.jpg"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Product image for storefront display
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -673,6 +691,19 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-imageUrl">Image URL (optional)</Label>
+              <Input
+                id="edit-imageUrl"
+                type="url"
+                placeholder="https://example.com/product-image.jpg"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Product image for storefront display
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

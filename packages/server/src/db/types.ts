@@ -107,6 +107,7 @@ export interface PaymentLinkRecord {
   facilitator_id: string;
   name: string;
   description: string | null;
+  image_url: string | null;    // Product image for storefront display
   slug: string | null;         // URL slug (e.g., /pay/my-product)
   link_type: 'payment' | 'redirect' | 'proxy';  // What happens after payment
   amount: string;              // Atomic units (e.g., "1000000" for $1 USDC)

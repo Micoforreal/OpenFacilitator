@@ -106,6 +106,13 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       db.exec("ALTER TABLE payment_links ADD COLUMN access_ttl INTEGER NOT NULL DEFAULT 0");
       console.log('✅ Added access_ttl column to payment_links table');
     }
+
+    // Add image_url column (for storefront display)
+    const hasImageUrl = paymentLinksColumns.some(col => col.name === 'image_url');
+    if (paymentLinksColumns.length > 0 && !hasImageUrl) {
+      db.exec("ALTER TABLE payment_links ADD COLUMN image_url TEXT");
+      console.log('✅ Added image_url column to payment_links table');
+    }
   } catch (e) {
     // Table might not exist yet, that's fine
   }
@@ -295,6 +302,7 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       facilitator_id TEXT NOT NULL REFERENCES facilitators(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT,
+      image_url TEXT,
       slug TEXT,
       link_type TEXT NOT NULL DEFAULT 'payment',
       amount TEXT NOT NULL,

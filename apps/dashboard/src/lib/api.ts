@@ -191,6 +191,7 @@ export interface PaymentLink {
   id: string;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   slug: string | null;
   linkType: LinkType;
   amount: string;
@@ -227,6 +228,7 @@ export interface PaymentLinkPayment {
 export interface CreatePaymentLinkRequest {
   name: string;
   description?: string;
+  imageUrl?: string;
   slug?: string;
   linkType?: LinkType;
   amount: string;
@@ -597,6 +599,7 @@ class ApiClient {
       accessTtl: number;
       webhookId: string | null;
       webhookUrl: string | null;
+      imageUrl: string | null;
       active: boolean;
     }>
   ): Promise<PaymentLink> {

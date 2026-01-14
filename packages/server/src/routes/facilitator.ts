@@ -9,6 +9,7 @@ import {
   getPaymentLinkById,
   getPaymentLinkByIdOrSlug,
   getPaymentLinkBySlug,
+  getActivePaymentLinks,
   createPaymentLinkPayment,
   updatePaymentLinkPaymentStatus,
 } from '../db/payment-links.js';
@@ -2836,6 +2837,239 @@ router.all('/u/:slug', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
+});
+
+/**
+ * Storefront - Public page showing all active payment links for a facilitator
+ */
+router.get('/store', requireFacilitator, (req: Request, res: Response) => {
+  const facilitator = req.facilitator;
+  if (!facilitator) {
+    res.status(404).send('Facilitator not found');
+    return;
+  }
+
+  // Get all active payment links for this facilitator
+  const links = getActivePaymentLinks(facilitator.id);
+
+  // Build base URL for links
+  const baseUrl = facilitator.custom_domain
+    ? `https://${facilitator.custom_domain}`
+    : `https://${facilitator.subdomain}.openfacilitator.io`;
+
+  // Helper to format price
+  const formatPrice = (amount: string, decimals = 6) => {
+    const num = parseFloat(amount) / Math.pow(10, decimals);
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Generate product cards HTML
+  const productCards = links.map(link => {
+    const price = formatPrice(link.amount);
+    const imageUrl = link.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="system-ui" font-size="48"%3E%3C/text%3E%3C/svg%3E';
+    const linkUrl = link.slug ? `${baseUrl}/pay/${link.slug}` : `${baseUrl}/pay/${link.id}`;
+
+    return `
+      <a href="${linkUrl}" class="product-card">
+        <div class="product-image">
+          <img src="${imageUrl}" alt="${link.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22400%22 height=%22300%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%239ca3af%22 font-family=%22system-ui%22 font-size=%2248%22%3E%3C/text%3E%3C/svg%3E'" />
+        </div>
+        <div class="product-info">
+          <h3 class="product-name">${link.name}</h3>
+          ${link.description ? `<p class="product-description">${link.description}</p>` : ''}
+          <div class="product-price">$${price} USDC</div>
+        </div>
+      </a>
+    `;
+  }).join('');
+
+  // Render storefront HTML
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${facilitator.name} - Store</title>
+  ${facilitator.favicon ? `<link rel="icon" href="data:image/png;base64,${facilitator.favicon}" type="image/png">` : ''}
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #fafafa;
+      color: #111;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 1.5rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .store-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111;
+    }
+
+    .powered-by {
+      font-size: 0.75rem;
+      color: #888;
+    }
+
+    .powered-by a {
+      color: #666;
+      text-decoration: none;
+    }
+
+    .powered-by a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .product-card {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    .product-image {
+      aspect-ratio: 4/3;
+      overflow: hidden;
+      background: #f3f4f6;
+    }
+
+    .product-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .product-info {
+      padding: 1rem;
+    }
+
+    .product-name {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #111;
+    }
+
+    .product-description {
+      font-size: 0.875rem;
+      color: #666;
+      margin-bottom: 0.5rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .product-price {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #111;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #666;
+    }
+
+    .empty-state h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    @media (max-width: 640px) {
+      .product-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+
+      .container {
+        padding: 1rem;
+      }
+
+      .header {
+        padding: 1rem;
+      }
+
+      .store-name {
+        font-size: 1.25rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <h1 class="store-name">${facilitator.name}</h1>
+      <div class="powered-by">
+        Powered by <a href="https://openfacilitator.io" target="_blank" rel="noopener">OpenFacilitator</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    ${links.length > 0 ? `
+      <div class="product-grid">
+        ${productCards}
+      </div>
+    ` : `
+      <div class="empty-state">
+        <h2>No products available</h2>
+        <p>Check back soon for new items!</p>
+      </div>
+    `}
+  </main>
+</body>
+</html>
+  `;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
 });
 
 export { router as facilitatorRouter };

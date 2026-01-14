@@ -1838,6 +1838,7 @@ router.post('/facilitators/:id/webhooks/:webhookId/test', requireAuth, async (re
 const createPaymentLinkSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  imageUrl: z.string().url().max(2048).optional(), // Product image for storefront
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
   linkType: z.enum(['payment', 'redirect', 'proxy']).optional().default('payment'),
   amount: z.string().min(1), // Atomic units
@@ -1855,6 +1856,7 @@ const createPaymentLinkSchema = z.object({
 const updatePaymentLinkSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
+  imageUrl: z.string().url().max(2048).optional().nullable(), // Product image for storefront
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
   linkType: z.enum(['payment', 'redirect', 'proxy']).optional(),
   amount: z.string().min(1).optional(),
@@ -1873,7 +1875,7 @@ const updatePaymentLinkSchema = z.object({
 // Helper to build payment link URL based on environment
 function getPaymentLinkUrl(subdomain: string, customDomain: string | null, linkIdOrSlug: string): string {
   if (process.env.NODE_ENV === 'development') {
-    return `http://localhost:5002/pay/${linkIdOrSlug}`;
+    return `http://localhost:5002/pay/${linkIdOrSlug}?_subdomain=${subdomain}`;
   }
   // Use custom domain if available, otherwise use subdomain
   if (customDomain) {
@@ -1905,6 +1907,7 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
         id: link.id,
         name: link.name,
         description: link.description,
+        imageUrl: link.image_url,
         slug: link.slug,
         linkType: link.link_type,
         amount: link.amount,
@@ -1981,6 +1984,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       facilitator_id: req.params.id,
       name: parsed.data.name,
       description: parsed.data.description,
+      image_url: parsed.data.imageUrl,
       slug: parsed.data.slug,
       link_type: parsed.data.linkType,
       amount: parsed.data.amount,
@@ -2003,6 +2007,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       id: link.id,
       name: link.name,
       description: link.description,
+      imageUrl: link.image_url,
       slug: link.slug,
       linkType: link.link_type,
       amount: link.amount,
@@ -2054,6 +2059,7 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
       id: link.id,
       name: link.name,
       description: link.description,
+      imageUrl: link.image_url,
       slug: link.slug,
       linkType: link.link_type,
       amount: link.amount,
@@ -2136,6 +2142,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
     const updates: Parameters<typeof updatePaymentLink>[1] = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+    if (parsed.data.imageUrl !== undefined) updates.image_url = parsed.data.imageUrl;
     if (parsed.data.slug !== undefined) updates.slug = parsed.data.slug;
     if (parsed.data.linkType !== undefined) updates.link_type = parsed.data.linkType;
     if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
@@ -2169,6 +2176,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       id: link.id,
       name: link.name,
       description: link.description,
+      imageUrl: link.image_url,
       slug: link.slug,
       linkType: link.link_type,
       amount: link.amount,
