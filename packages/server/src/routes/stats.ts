@@ -5,6 +5,7 @@
  * GET /stats/base - Stats via Base payment ($5 USDC)
  */
 import { Router, type Request, type Response, type IRouter } from 'express';
+import { OpenFacilitator, type PaymentPayload, type PaymentRequirements } from '@openfacilitator/sdk';
 import { getGlobalStats } from '../db/transactions.js';
 
 const router: IRouter = Router();
@@ -25,6 +26,9 @@ const BASE_FEE_PAYER = process.env.STATS_BASE_FEE_PAYER || '0x7C766F5fd9Ab3Dc09A
 // Facilitator endpoint (configurable for self-hosted deployments)
 const FACILITATOR_URL = process.env.STATS_FACILITATOR_URL || 'https://pay.openfacilitator.io';
 const API_URL = process.env.API_URL || 'https://api.openfacilitator.io';
+
+// Initialize SDK client
+const facilitator = new OpenFacilitator({ url: FACILITATOR_URL });
 
 // Shared output schema for stats response
 const OUTPUT_SCHEMA = {
@@ -119,7 +123,7 @@ async function handleStatsRequest(
 
   try {
     // Decode payment payload
-    let paymentPayload: unknown;
+    let paymentPayload: PaymentPayload;
     try {
       const decoded = Buffer.from(paymentHeader, 'base64').toString('utf-8');
       paymentPayload = JSON.parse(decoded);
@@ -131,52 +135,25 @@ async function handleStatsRequest(
       return;
     }
 
-    // Step 1: Verify payment with facilitator
-    const verifyResponse = await fetch(`${FACILITATOR_URL}/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        x402Version: 1,
-        paymentPayload,
-        paymentRequirements: requirement,
-      }),
-    });
-
-    const verifyResult = (await verifyResponse.json()) as {
-      valid?: boolean;
-      invalidReason?: string;
-    };
+    // Verify payment
+    const verifyResult = await facilitator.verify(paymentPayload, requirement as PaymentRequirements);
 
     if (!verifyResult.valid) {
       res.status(402).json({
         error: 'Payment verification failed',
-        reason: verifyResult.invalidReason || 'Unknown verification error',
+        reason: verifyResult.error || 'Unknown verification error',
         accepts: [requirement],
       });
       return;
     }
 
-    // Step 2: Settle payment
-    const settleResponse = await fetch(`${FACILITATOR_URL}/settle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        x402Version: 1,
-        paymentPayload,
-        paymentRequirements: requirement,
-      }),
-    });
-
-    const settleResult = (await settleResponse.json()) as {
-      success?: boolean;
-      transactionHash?: string;
-      errorMessage?: string;
-    };
+    // Settle payment
+    const settleResult = await facilitator.settle(paymentPayload, requirement as PaymentRequirements);
 
     if (!settleResult.success) {
       res.status(402).json({
         error: 'Payment settlement failed',
-        reason: settleResult.errorMessage || 'Unknown settlement error',
+        reason: settleResult.error || 'Unknown settlement error',
         accepts: [requirement],
       });
       return;
