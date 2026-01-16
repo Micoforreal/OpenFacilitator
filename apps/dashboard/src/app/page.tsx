@@ -100,7 +100,7 @@ export default function Home() {
       </section>
 
       {/* Instant Integration */}
-      <section id="integration" className="py-20 px-6">
+      <section id="integration" className="py-20 px-6 bg-background">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">
             Or just use ours
@@ -147,7 +147,7 @@ export default function Home() {
                 {"\n\n"}
                 <span className="text-[#ff7b72]">const</span>
                 <span className="text-[#c9d1d9]">{" { "}</span>
-                <span className="text-[#c9d1d9]">valid</span>
+                <span className="text-[#c9d1d9]">isValid</span>
                 <span className="text-[#c9d1d9]">{" } = "}</span>
                 <span className="text-[#ff7b72]">await</span>
                 <span className="text-[#c9d1d9]"> facilitator.</span>
@@ -156,7 +156,7 @@ export default function Home() {
                 {"\n"}
                 <span className="text-[#ff7b72]">const</span>
                 <span className="text-[#c9d1d9]">{" { "}</span>
-                <span className="text-[#c9d1d9]">transactionHash</span>
+                <span className="text-[#c9d1d9]">transaction</span>
                 <span className="text-[#c9d1d9]">{" } = "}</span>
                 <span className="text-[#ff7b72]">await</span>
                 <span className="text-[#c9d1d9]"> facilitator.</span>
