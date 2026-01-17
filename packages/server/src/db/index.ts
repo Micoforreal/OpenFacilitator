@@ -505,6 +505,77 @@ export function initializeDatabase(dbPath?: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_proxy_urls_facilitator ON proxy_urls(facilitator_id);
     CREATE INDEX IF NOT EXISTS idx_proxy_urls_slug ON proxy_urls(facilitator_id, slug);
+
+    -- Refund configuration per facilitator (global enable/disable)
+    CREATE TABLE IF NOT EXISTS refund_configs (
+      id TEXT PRIMARY KEY,
+      facilitator_id TEXT NOT NULL UNIQUE REFERENCES facilitators(id) ON DELETE CASCADE,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Resource owners: third parties who use a facilitator and want refund protection
+    CREATE TABLE IF NOT EXISTS resource_owners (
+      id TEXT PRIMARY KEY,
+      facilitator_id TEXT NOT NULL REFERENCES facilitators(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+      refund_address TEXT,
+      name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(facilitator_id, user_id)
+    );
+
+    -- Refund wallets (one per resource owner per network)
+    CREATE TABLE IF NOT EXISTS refund_wallets (
+      id TEXT PRIMARY KEY,
+      resource_owner_id TEXT NOT NULL REFERENCES resource_owners(id) ON DELETE CASCADE,
+      network TEXT NOT NULL,
+      wallet_address TEXT NOT NULL,
+      encrypted_private_key TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(resource_owner_id, network)
+    );
+
+    -- Registered servers that can report failures (owned by resource owners)
+    CREATE TABLE IF NOT EXISTS registered_servers (
+      id TEXT PRIMARY KEY,
+      resource_owner_id TEXT NOT NULL REFERENCES resource_owners(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      name TEXT,
+      api_key_hash TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(resource_owner_id, url)
+    );
+
+    -- Claims for refunds (scoped to resource owner via server)
+    CREATE TABLE IF NOT EXISTS claims (
+      id TEXT PRIMARY KEY,
+      resource_owner_id TEXT NOT NULL REFERENCES resource_owners(id) ON DELETE CASCADE,
+      server_id TEXT NOT NULL REFERENCES registered_servers(id) ON DELETE CASCADE,
+      original_tx_hash TEXT NOT NULL UNIQUE,
+      user_wallet TEXT NOT NULL,
+      amount TEXT NOT NULL,
+      asset TEXT NOT NULL,
+      network TEXT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'paid', 'rejected', 'expired')),
+      payout_tx_hash TEXT,
+      reported_at TEXT NOT NULL DEFAULT (datetime('now')),
+      paid_at TEXT,
+      expires_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_refund_configs_facilitator ON refund_configs(facilitator_id);
+    CREATE INDEX IF NOT EXISTS idx_resource_owners_facilitator ON resource_owners(facilitator_id);
+    CREATE INDEX IF NOT EXISTS idx_resource_owners_user ON resource_owners(user_id);
+    CREATE INDEX IF NOT EXISTS idx_refund_wallets_resource_owner ON refund_wallets(resource_owner_id);
+    CREATE INDEX IF NOT EXISTS idx_registered_servers_resource_owner ON registered_servers(resource_owner_id);
+    CREATE INDEX IF NOT EXISTS idx_registered_servers_api_key ON registered_servers(api_key_hash);
+    CREATE INDEX IF NOT EXISTS idx_claims_resource_owner ON claims(resource_owner_id);
+    CREATE INDEX IF NOT EXISTS idx_claims_user_wallet ON claims(user_wallet);
+    CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
   `);
 
   console.log('✅ Database initialized at', databasePath);
@@ -541,4 +612,9 @@ export {
   isSlugUnique as isProxySlugUnique,
 } from './proxy-urls.js';
 export * from './types.js';
+export * from './refund-configs.js';
+export * from './resource-owners.js';
+export * from './refund-wallets.js';
+export * from './registered-servers.js';
+export * from './claims.js';
 

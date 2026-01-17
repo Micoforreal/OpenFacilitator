@@ -320,6 +320,121 @@ export interface StorefrontDetailResponse extends Storefront {
   products: StorefrontProduct[];
 }
 
+// Refund types
+export interface RefundConfig {
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RefundWallet {
+  network: string;
+  address: string;
+  balance: string;
+  createdAt: string;
+}
+
+export interface RefundWalletsResponse {
+  wallets: RefundWallet[];
+  supportedNetworks: string[];
+}
+
+export interface RegisteredServer {
+  id: string;
+  url: string;
+  name: string | null;
+  active: boolean;
+  apiKey?: string; // Only on creation
+  createdAt: string;
+}
+
+export interface RegisteredServersResponse {
+  servers: RegisteredServer[];
+}
+
+export interface Claim {
+  id: string;
+  originalTxHash: string;
+  userWallet: string;
+  amount: string;
+  asset: string;
+  network: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'expired';
+  payoutTxHash: string | null;
+  reportedAt: string;
+  paidAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface ClaimStats {
+  totalClaims: number;
+  pendingClaims: number;
+  approvedClaims: number;
+  paidClaims: number;
+  rejectedClaims: number;
+  expiredClaims: number;
+  totalPaidAmount: string;
+}
+
+export interface ClaimsResponse {
+  claims: Claim[];
+  stats: ClaimStats;
+  pagination?: { limit: number; offset: number };
+}
+
+// Resource Owner types (for overview)
+export interface ResourceOwnerStats {
+  wallets: number;
+  servers: number;
+  totalClaims: number;
+  pendingClaims: number;
+  paidClaims: number;
+  totalPaidAmount: string;
+}
+
+export interface ResourceOwner {
+  id: string;
+  userId: string;
+  refundAddress: string | null;
+  name: string | null;
+  createdAt: string;
+  stats: ResourceOwnerStats;
+}
+
+export interface ResourceOwnersResponse {
+  resourceOwners: ResourceOwner[];
+  total: number;
+}
+
+export interface ResourceOwnerDetail {
+  id: string;
+  userId: string;
+  refundAddress: string | null;
+  name: string | null;
+  createdAt: string;
+  wallets: RefundWallet[];
+  servers: RegisteredServer[];
+  claimStats: ClaimStats;
+  recentClaims: Claim[];
+}
+
+export interface RefundsOverview {
+  resourceOwners: number;
+  totalWallets: number;
+  totalServers: number;
+  totalWalletBalance: string;
+  claims: {
+    total: number;
+    pending: number;
+    approved: number;
+    paid: number;
+    rejected: number;
+    totalPaidAmount: string;
+  };
+  supportedNetworks: string[];
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -845,6 +960,32 @@ class ApiClient {
     return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}/products/${productId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Refund Config
+  async getRefundConfig(facilitatorId: string): Promise<RefundConfig> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/config`);
+  }
+
+  async updateRefundConfig(facilitatorId: string, data: { enabled: boolean }): Promise<RefundConfig> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/config`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Refunds Overview (for facilitator admins)
+  async getRefundsOverview(facilitatorId: string): Promise<RefundsOverview> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/overview`);
+  }
+
+  // Resource Owners (for facilitator admins)
+  async getResourceOwners(facilitatorId: string): Promise<ResourceOwnersResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/resource-owners`);
+  }
+
+  async getResourceOwner(facilitatorId: string, resourceOwnerId: string): Promise<ResourceOwnerDetail> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/resource-owners/${resourceOwnerId}`);
   }
 }
 

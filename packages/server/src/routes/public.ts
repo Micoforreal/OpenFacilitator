@@ -2,7 +2,15 @@ import { Router, type Request, type Response, type IRouter } from 'express';
 import { createFacilitator, type FacilitatorConfig, type TokenConfig, getSolanaPublicKey, networkToCaip2 } from '@openfacilitator/core';
 import { z } from 'zod';
 import { createTransaction, updateTransactionStatus } from '../db/transactions.js';
-import type { Hex } from 'viem';
+import { getClaimableByUserWallet, getClaimsByUserWallet, getClaimById, getClaimsByResourceOwner, getClaimStats } from '../db/claims.js';
+import { getFacilitatorBySubdomain, getFacilitatorById } from '../db/facilitators.js';
+import { getOrCreateResourceOwner, getResourceOwnerById, getResourceOwnerByUserId } from '../db/resource-owners.js';
+import { getRefundWalletsByResourceOwner, getRefundWallet, hasRefundWallet } from '../db/refund-wallets.js';
+import { createRegisteredServer, getRegisteredServersByResourceOwner, deleteRegisteredServer, regenerateServerApiKey, getRegisteredServerById } from '../db/registered-servers.js';
+import { getOrCreateRefundConfig } from '../db/refund-configs.js';
+import { reportFailure, executeClaimPayout, approveClaim, rejectClaim } from '../services/claims.js';
+import { generateRefundWallet, getRefundWalletBalances, deleteRefundWallet, SUPPORTED_REFUND_NETWORKS } from '../services/refund-wallet.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router: IRouter = Router();
 
@@ -365,6 +373,678 @@ router.get('/free/info', (_req: Request, res: Response) => {
       note: 'Fair use policy applies. For high-volume usage, please self-host or get a managed instance.',
     },
   });
+});
+
+// ============================================
+// CLAIMS ENDPOINTS (for SDK and users)
+// ============================================
+
+/**
+ * POST /claims/report-failure - Report a failure from a registered server
+ * Header: X-Server-Api-Key
+ */
+router.post('/claims/report-failure', async (req: Request, res: Response) => {
+  try {
+    const apiKey = req.headers['x-server-api-key'] as string;
+
+    if (!apiKey) {
+      res.status(401).json({ success: false, error: 'Missing X-Server-Api-Key header' });
+      return;
+    }
+
+    const { originalTxHash, userWallet, amount, asset, network, reason } = req.body;
+
+    if (!originalTxHash || !userWallet || !amount || !asset || !network) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required fields: originalTxHash, userWallet, amount, asset, network',
+      });
+      return;
+    }
+
+    const result = await reportFailure({
+      apiKey,
+      originalTxHash,
+      userWallet,
+      amount,
+      asset,
+      network,
+      reason,
+    });
+
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Report failure error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/claims - Get claimable refunds for a wallet
+ * Query params: wallet (required), facilitator (optional subdomain)
+ */
+router.get('/api/claims', async (req: Request, res: Response) => {
+  try {
+    const wallet = req.query.wallet as string;
+    const facilitatorSubdomain = req.query.facilitator as string | undefined;
+
+    if (!wallet) {
+      res.status(400).json({ error: 'Missing wallet query parameter' });
+      return;
+    }
+
+    let facilitatorId: string | undefined;
+    if (facilitatorSubdomain) {
+      const facilitator = getFacilitatorBySubdomain(facilitatorSubdomain);
+      if (!facilitator) {
+        res.status(404).json({ error: 'Facilitator not found' });
+        return;
+      }
+      facilitatorId = facilitator.id;
+    }
+
+    const claims = getClaimableByUserWallet(wallet, facilitatorId);
+
+    res.json({
+      claims: claims.map((c) => ({
+        id: c.id,
+        originalTxHash: c.original_tx_hash,
+        amount: c.amount,
+        asset: c.asset,
+        network: c.network,
+        reason: c.reason,
+        status: c.status,
+        reportedAt: c.reported_at,
+        expiresAt: c.expires_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Get claimable error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/claims/history - Get claim history for a wallet
+ */
+router.get('/api/claims/history', async (req: Request, res: Response) => {
+  try {
+    const wallet = req.query.wallet as string;
+    const facilitatorSubdomain = req.query.facilitator as string | undefined;
+
+    if (!wallet) {
+      res.status(400).json({ error: 'Missing wallet query parameter' });
+      return;
+    }
+
+    let facilitatorId: string | undefined;
+    if (facilitatorSubdomain) {
+      const facilitator = getFacilitatorBySubdomain(facilitatorSubdomain);
+      if (!facilitator) {
+        res.status(404).json({ error: 'Facilitator not found' });
+        return;
+      }
+      facilitatorId = facilitator.id;
+    }
+
+    const claims = getClaimsByUserWallet(wallet, facilitatorId);
+
+    res.json({
+      claims: claims.map((c) => ({
+        id: c.id,
+        originalTxHash: c.original_tx_hash,
+        amount: c.amount,
+        asset: c.asset,
+        network: c.network,
+        reason: c.reason,
+        status: c.status,
+        payoutTxHash: c.payout_tx_hash,
+        reportedAt: c.reported_at,
+        paidAt: c.paid_at,
+        expiresAt: c.expires_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Get claims history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/claims/:id/execute - Execute a claim payout (only for approved claims)
+ * Note: In production, you'd want signature verification here
+ */
+router.post('/api/claims/:id/execute', async (req: Request, res: Response) => {
+  try {
+    const claim = getClaimById(req.params.id);
+    if (!claim) {
+      res.status(404).json({ error: 'Claim not found' });
+      return;
+    }
+
+    if (claim.status !== 'approved') {
+      res.status(400).json({
+        error: `Claim is not approved for payout (current status: ${claim.status})`,
+      });
+      return;
+    }
+
+    // TODO: In production, verify wallet signature to prove ownership
+    // const { signature } = req.body;
+    // if (!verifySignature(claim.user_wallet, signature)) {
+    //   return res.status(403).json({ error: 'Invalid signature' });
+    // }
+
+    const result = await executeClaimPayout(req.params.id);
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Payout failed' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      transactionHash: result.transactionHash,
+    });
+  } catch (error) {
+    console.error('Execute claim error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// RESOURCE OWNER ENDPOINTS (for third-party API owners)
+// Uses session auth (same as dashboard login)
+// ============================================
+
+/**
+ * POST /api/resource-owners/register - Register as a resource owner
+ * Body: { facilitator: string (subdomain), name?: string, refundAddress?: string }
+ * Auth: Session (login required)
+ */
+router.post('/api/resource-owners/register', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { facilitator: subdomain, name, refundAddress } = req.body;
+    if (!subdomain) {
+      res.status(400).json({ error: 'Missing facilitator subdomain' });
+      return;
+    }
+
+    const facilitator = getFacilitatorBySubdomain(subdomain);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    // Check if refunds are enabled for this facilitator
+    const refundConfig = getOrCreateRefundConfig(facilitator.id);
+    if (refundConfig.enabled !== 1) {
+      res.status(400).json({ error: 'Refunds are not enabled for this facilitator' });
+      return;
+    }
+
+    const resourceOwner = getOrCreateResourceOwner({
+      facilitator_id: facilitator.id,
+      user_id: req.user!.id,
+      name,
+      refund_address: refundAddress,
+    });
+
+    res.status(201).json({
+      id: resourceOwner.id,
+      facilitatorId: resourceOwner.facilitator_id,
+      userId: resourceOwner.user_id,
+      refundAddress: resourceOwner.refund_address,
+      name: resourceOwner.name,
+      createdAt: resourceOwner.created_at,
+    });
+  } catch (error) {
+    console.error('Register resource owner error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    res.status(500).json({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+/**
+ * GET /api/resource-owners/me - Get current resource owner profile
+ * Query: facilitator (subdomain)
+ * Auth: Session (login required)
+ */
+router.get('/api/resource-owners/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const subdomain = req.query.facilitator as string;
+    if (!subdomain) {
+      res.status(400).json({ error: 'Missing facilitator query parameter' });
+      return;
+    }
+
+    const facilitator = getFacilitatorBySubdomain(subdomain);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const resourceOwner = getResourceOwnerByUserId(facilitator.id, req.user!.id);
+    if (!resourceOwner) {
+      res.status(404).json({ error: 'Resource owner not found. Please register first.' });
+      return;
+    }
+
+    res.json({
+      id: resourceOwner.id,
+      facilitatorId: resourceOwner.facilitator_id,
+      userId: resourceOwner.user_id,
+      refundAddress: resourceOwner.refund_address,
+      name: resourceOwner.name,
+      createdAt: resourceOwner.created_at,
+    });
+  } catch (error) {
+    console.error('Get resource owner error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Verify resource owner access - checks user owns the resource owner record
+ */
+function verifyResourceOwnerAccess(req: Request, res: Response): { resourceOwnerId: string; userId: string } | null {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return null;
+  }
+
+  const resourceOwnerId = req.params.resourceOwnerId;
+  const resourceOwner = getResourceOwnerById(resourceOwnerId);
+
+  if (!resourceOwner) {
+    res.status(404).json({ error: 'Resource owner not found' });
+    return null;
+  }
+
+  if (resourceOwner.user_id !== req.user.id) {
+    res.status(403).json({ error: 'Access denied' });
+    return null;
+  }
+
+  return { resourceOwnerId, userId: req.user.id };
+}
+
+/**
+ * GET /api/resource-owners/:resourceOwnerId/wallets - Get refund wallets with balances
+ */
+router.get('/api/resource-owners/:resourceOwnerId/wallets', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const wallets = await getRefundWalletBalances(access.resourceOwnerId);
+
+    res.json({
+      wallets,
+      supportedNetworks: SUPPORTED_REFUND_NETWORKS,
+    });
+  } catch (error) {
+    console.error('Get wallets error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/wallets - Generate refund wallet
+ * Body: { network: string }
+ */
+router.post('/api/resource-owners/:resourceOwnerId/wallets', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { network } = req.body;
+    if (!network) {
+      res.status(400).json({ error: 'Missing network' });
+      return;
+    }
+
+    if (!SUPPORTED_REFUND_NETWORKS.includes(network)) {
+      res.status(400).json({
+        error: `Unsupported network: ${network}. Supported: ${SUPPORTED_REFUND_NETWORKS.join(', ')}`
+      });
+      return;
+    }
+
+    const result = await generateRefundWallet(access.resourceOwnerId, network);
+
+    res.status(result.created ? 201 : 200).json({
+      address: result.address,
+      network,
+      created: result.created,
+      message: result.created
+        ? `Wallet generated. Send USDC to ${result.address} to fund refunds.`
+        : 'Wallet already exists for this network.',
+    });
+  } catch (error) {
+    console.error('Generate wallet error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/resource-owners/:resourceOwnerId/wallets/:network - Delete refund wallet
+ */
+router.delete('/api/resource-owners/:resourceOwnerId/wallets/:network', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { network } = req.params;
+    const deleted = deleteRefundWallet(access.resourceOwnerId, network);
+
+    if (!deleted) {
+      res.status(404).json({ error: 'Wallet not found' });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete wallet error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/resource-owners/:resourceOwnerId/servers - Get registered servers
+ */
+router.get('/api/resource-owners/:resourceOwnerId/servers', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const servers = getRegisteredServersByResourceOwner(access.resourceOwnerId);
+
+    res.json({
+      servers: servers.map((s) => ({
+        id: s.id,
+        url: s.url,
+        name: s.name,
+        active: s.active === 1,
+        createdAt: s.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Get servers error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/servers - Register a new server
+ * Body: { url: string, name?: string }
+ * Returns the API key ONCE - store it securely!
+ */
+router.post('/api/resource-owners/:resourceOwnerId/servers', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { url, name } = req.body;
+    if (!url) {
+      res.status(400).json({ error: 'Missing url' });
+      return;
+    }
+
+    const { server, apiKey } = createRegisteredServer({
+      resource_owner_id: access.resourceOwnerId,
+      url,
+      name,
+    });
+
+    res.status(201).json({
+      server: {
+        id: server.id,
+        url: server.url,
+        name: server.name,
+        active: server.active === 1,
+        createdAt: server.created_at,
+      },
+      apiKey,
+      warning: 'Store this API key securely! It will not be shown again.',
+    });
+  } catch (error) {
+    console.error('Register server error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/resource-owners/:resourceOwnerId/servers/:serverId - Delete a server
+ */
+router.delete('/api/resource-owners/:resourceOwnerId/servers/:serverId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { serverId } = req.params;
+
+    // Verify server belongs to this resource owner
+    const server = getRegisteredServerById(serverId);
+    if (!server || server.resource_owner_id !== access.resourceOwnerId) {
+      res.status(404).json({ error: 'Server not found' });
+      return;
+    }
+
+    const deleted = deleteRegisteredServer(serverId);
+    if (!deleted) {
+      res.status(404).json({ error: 'Server not found' });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete server error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/servers/:serverId/regenerate-key - Regenerate API key
+ */
+router.post('/api/resource-owners/:resourceOwnerId/servers/:serverId/regenerate-key', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { serverId } = req.params;
+
+    // Verify server belongs to this resource owner
+    const server = getRegisteredServerById(serverId);
+    if (!server || server.resource_owner_id !== access.resourceOwnerId) {
+      res.status(404).json({ error: 'Server not found' });
+      return;
+    }
+
+    const result = regenerateServerApiKey(serverId);
+    if (!result) {
+      res.status(404).json({ error: 'Server not found' });
+      return;
+    }
+
+    res.json({
+      apiKey: result.apiKey,
+      warning: 'Store this API key securely! The old key is now invalid.',
+    });
+  } catch (error) {
+    console.error('Regenerate key error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/resource-owners/:resourceOwnerId/claims - Get claims for resource owner
+ * Query: status (optional filter)
+ */
+router.get('/api/resource-owners/:resourceOwnerId/claims', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const status = req.query.status as string | undefined;
+    const claims = getClaimsByResourceOwner(access.resourceOwnerId, {
+      status: status as 'pending' | 'approved' | 'paid' | 'rejected' | 'expired' | undefined
+    });
+    const stats = getClaimStats(access.resourceOwnerId);
+
+    res.json({
+      claims: claims.map((c) => ({
+        id: c.id,
+        serverId: c.server_id,
+        originalTxHash: c.original_tx_hash,
+        userWallet: c.user_wallet,
+        amount: c.amount,
+        asset: c.asset,
+        network: c.network,
+        reason: c.reason,
+        status: c.status,
+        payoutTxHash: c.payout_tx_hash,
+        reportedAt: c.reported_at,
+        paidAt: c.paid_at,
+        expiresAt: c.expires_at,
+      })),
+      stats,
+    });
+  } catch (error) {
+    console.error('Get claims error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/claims/:claimId/approve - Approve a claim
+ */
+router.post('/api/resource-owners/:resourceOwnerId/claims/:claimId/approve', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { claimId } = req.params;
+    const claim = getClaimById(claimId);
+
+    if (!claim || claim.resource_owner_id !== access.resourceOwnerId) {
+      res.status(404).json({ error: 'Claim not found' });
+      return;
+    }
+
+    const updated = approveClaim(claimId);
+    if (!updated) {
+      res.status(400).json({ error: 'Claim cannot be approved (may not be pending)' });
+      return;
+    }
+
+    res.json({
+      id: updated.id,
+      status: updated.status,
+    });
+  } catch (error) {
+    console.error('Approve claim error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/claims/:claimId/reject - Reject a claim
+ */
+router.post('/api/resource-owners/:resourceOwnerId/claims/:claimId/reject', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { claimId } = req.params;
+    const claim = getClaimById(claimId);
+
+    if (!claim || claim.resource_owner_id !== access.resourceOwnerId) {
+      res.status(404).json({ error: 'Claim not found' });
+      return;
+    }
+
+    const updated = rejectClaim(claimId);
+    if (!updated) {
+      res.status(400).json({ error: 'Claim cannot be rejected' });
+      return;
+    }
+
+    res.json({
+      id: updated.id,
+      status: updated.status,
+    });
+  } catch (error) {
+    console.error('Reject claim error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/resource-owners/:resourceOwnerId/claims/:claimId/payout - Execute payout
+ */
+router.post('/api/resource-owners/:resourceOwnerId/claims/:claimId/payout', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const { claimId } = req.params;
+    const claim = getClaimById(claimId);
+
+    if (!claim || claim.resource_owner_id !== access.resourceOwnerId) {
+      res.status(404).json({ error: 'Claim not found' });
+      return;
+    }
+
+    if (claim.status !== 'approved') {
+      res.status(400).json({ error: `Claim must be approved before payout (current: ${claim.status})` });
+      return;
+    }
+
+    const result = await executeClaimPayout(claimId);
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Payout failed' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      transactionHash: result.transactionHash,
+    });
+  } catch (error) {
+    console.error('Execute payout error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/resource-owners/:resourceOwnerId/stats - Get stats for resource owner
+ */
+router.get('/api/resource-owners/:resourceOwnerId/stats', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const access = verifyResourceOwnerAccess(req, res);
+    if (!access) return;
+
+    const stats = getClaimStats(access.resourceOwnerId);
+    const wallets = await getRefundWalletBalances(access.resourceOwnerId);
+    const servers = getRegisteredServersByResourceOwner(access.resourceOwnerId);
+
+    res.json({
+      claims: stats,
+      wallets: wallets.length,
+      servers: servers.filter(s => s.active === 1).length,
+      totalWalletBalance: wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0).toFixed(2),
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export { router as publicRouter };

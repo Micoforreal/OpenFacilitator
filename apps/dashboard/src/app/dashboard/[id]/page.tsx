@@ -44,8 +44,9 @@ import { SettlementActivityChart } from '@/components/settlement-activity-chart'
 import { WebhooksSection } from '@/components/webhooks-section';
 import { ProductsSection } from '@/components/products-section';
 import { StorefrontsSection } from '@/components/storefronts-section';
+import { RefundsSection } from '@/components/refunds-section';
 
-type Tab = 'transactions' | 'products' | 'storefronts' | 'webhooks' | 'settings';
+type Tab = 'transactions' | 'products' | 'storefronts' | 'webhooks' | 'refunds' | 'settings';
 
 function FaviconImage({ url, favicon, size = 'md' }: { url: string; favicon?: string | null; size?: 'md' | 'lg' }) {
   const [hasError, setHasError] = useState(false);
@@ -454,6 +455,17 @@ export default function FacilitatorDetailPage() {
               Webhooks
             </button>
             <button
+              onClick={() => setActiveTab('refunds')}
+              className={cn(
+                'pb-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+                activeTab === 'refunds'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Refunds
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={cn(
                 'pb-3 text-sm font-medium border-b-2 -mb-px transition-colors',
@@ -474,6 +486,8 @@ export default function FacilitatorDetailPage() {
           <StorefrontsSection facilitatorId={id} facilitator={facilitator} />
         ) : activeTab === 'webhooks' ? (
           <WebhooksSection facilitatorId={id} facilitator={facilitator} />
+        ) : activeTab === 'refunds' ? (
+          <RefundsSection facilitatorId={id} facilitator={facilitator} />
         ) : activeTab === 'transactions' ? (
           <div className="space-y-6">
             {/* Stats Row */}

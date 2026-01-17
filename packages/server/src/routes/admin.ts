@@ -54,6 +54,32 @@ import {
   getStorefrontStats,
   getFacilitatorStorefrontsStats,
 } from '../db/storefronts.js';
+import {
+  getOrCreateRefundConfig,
+  updateRefundConfig,
+} from '../db/refund-configs.js';
+import {
+  getRefundWallet,
+  getRefundWalletsByResourceOwner,
+} from '../db/refund-wallets.js';
+import {
+  getRegisteredServerById,
+  getRegisteredServersByResourceOwner,
+} from '../db/registered-servers.js';
+import {
+  getClaimsByResourceOwner,
+  getClaimById,
+  getClaimStats,
+} from '../db/claims.js';
+import {
+  getResourceOwnersByFacilitator,
+  getResourceOwnerById,
+} from '../db/resource-owners.js';
+import {
+  getRefundWalletBalance,
+  getRefundWalletBalances,
+  SUPPORTED_REFUND_NETWORKS,
+} from '../services/refund-wallet.js';
 import { getDatabase } from '../db/index.js';
 import { 
   defaultTokens, 
@@ -2874,6 +2900,244 @@ router.delete('/facilitators/:id/storefronts/:storefrontId/products/:productId',
     res.status(204).send();
   } catch (error) {
     console.error('Remove product from storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// REFUND MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/admin/facilitators/:id/refunds/config - Get refund configuration
+ */
+router.get('/facilitators/:id/refunds/config', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const config = getOrCreateRefundConfig(req.params.id);
+
+    res.json({
+      enabled: config.enabled === 1,
+      createdAt: formatSqliteDate(config.created_at),
+      updatedAt: formatSqliteDate(config.updated_at),
+    });
+  } catch (error) {
+    console.error('Get refund config error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/refunds/config - Update refund configuration
+ */
+router.post('/facilitators/:id/refunds/config', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    // Ensure config exists
+    getOrCreateRefundConfig(req.params.id);
+
+    // Update config
+    const config = updateRefundConfig(req.params.id, {
+      enabled: enabled ? 1 : 0,
+    });
+
+    if (!config) {
+      res.status(500).json({ error: 'Failed to update refund config' });
+      return;
+    }
+
+    res.json({
+      enabled: config.enabled === 1,
+      createdAt: formatSqliteDate(config.created_at),
+      updatedAt: formatSqliteDate(config.updated_at),
+    });
+  } catch (error) {
+    console.error('Update refund config error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// RESOURCE OWNER OVERVIEW ENDPOINTS (for facilitator admins)
+// Resource owners manage their own wallets/servers/claims via the public API
+// ============================================
+
+/**
+ * GET /api/admin/facilitators/:id/resource-owners - List all resource owners
+ */
+router.get('/facilitators/:id/resource-owners', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const resourceOwners = getResourceOwnersByFacilitator(req.params.id);
+
+    // Get stats for each resource owner
+    const ownersWithStats = await Promise.all(
+      resourceOwners.map(async (owner) => {
+        const wallets = await getRefundWalletBalances(owner.id);
+        const servers = getRegisteredServersByResourceOwner(owner.id);
+        const claimStats = getClaimStats(owner.id);
+
+        return {
+          id: owner.id,
+          userId: owner.user_id,
+          refundAddress: owner.refund_address,
+          name: owner.name,
+          createdAt: formatSqliteDate(owner.created_at),
+          stats: {
+            wallets: wallets.length,
+            servers: servers.filter(s => s.active === 1).length,
+            totalClaims: claimStats.totalClaims,
+            pendingClaims: claimStats.pendingClaims,
+            paidClaims: claimStats.paidClaims,
+            totalPaidAmount: claimStats.totalPaidAmount,
+          },
+        };
+      })
+    );
+
+    res.json({
+      resourceOwners: ownersWithStats,
+      total: resourceOwners.length,
+    });
+  } catch (error) {
+    console.error('Get resource owners error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/resource-owners/:ownerId - Get a specific resource owner with details
+ */
+router.get('/facilitators/:id/resource-owners/:ownerId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const owner = getResourceOwnerById(req.params.ownerId);
+    if (!owner || owner.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Resource owner not found' });
+      return;
+    }
+
+    const wallets = await getRefundWalletBalances(owner.id);
+    const servers = getRegisteredServersByResourceOwner(owner.id);
+    const claimStats = getClaimStats(owner.id);
+    const claims = getClaimsByResourceOwner(owner.id, { limit: 20 });
+
+    res.json({
+      id: owner.id,
+      userId: owner.user_id,
+      refundAddress: owner.refund_address,
+      name: owner.name,
+      createdAt: formatSqliteDate(owner.created_at),
+      wallets,
+      servers: servers.map(s => ({
+        id: s.id,
+        url: s.url,
+        name: s.name,
+        active: s.active === 1,
+        createdAt: formatSqliteDate(s.created_at),
+      })),
+      claimStats,
+      recentClaims: claims.map((c) => ({
+        id: c.id,
+        originalTxHash: c.original_tx_hash,
+        userWallet: c.user_wallet,
+        amount: c.amount,
+        asset: c.asset,
+        network: c.network,
+        reason: c.reason,
+        status: c.status,
+        payoutTxHash: c.payout_tx_hash,
+        reportedAt: formatSqliteDate(c.reported_at),
+        paidAt: formatSqliteDate(c.paid_at),
+        expiresAt: formatSqliteDate(c.expires_at),
+      })),
+    });
+  } catch (error) {
+    console.error('Get resource owner error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/refunds/overview - Get aggregate refund stats across all resource owners
+ */
+router.get('/facilitators/:id/refunds/overview', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const resourceOwners = getResourceOwnersByFacilitator(req.params.id);
+
+    // Aggregate stats across all resource owners
+    let totalClaims = 0;
+    let pendingClaims = 0;
+    let approvedClaims = 0;
+    let paidClaims = 0;
+    let rejectedClaims = 0;
+    let totalPaidAmount = 0;
+    let totalWallets = 0;
+    let totalServers = 0;
+    let totalWalletBalance = 0;
+
+    for (const owner of resourceOwners) {
+      const stats = getClaimStats(owner.id);
+      totalClaims += stats.totalClaims;
+      pendingClaims += stats.pendingClaims;
+      approvedClaims += stats.approvedClaims;
+      paidClaims += stats.paidClaims;
+      rejectedClaims += stats.rejectedClaims;
+      totalPaidAmount += parseFloat(stats.totalPaidAmount);
+
+      const wallets = await getRefundWalletBalances(owner.id);
+      totalWallets += wallets.length;
+      totalWalletBalance += wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0);
+
+      const servers = getRegisteredServersByResourceOwner(owner.id);
+      totalServers += servers.filter(s => s.active === 1).length;
+    }
+
+    res.json({
+      resourceOwners: resourceOwners.length,
+      totalWallets,
+      totalServers,
+      totalWalletBalance: totalWalletBalance.toFixed(2),
+      claims: {
+        total: totalClaims,
+        pending: pendingClaims,
+        approved: approvedClaims,
+        paid: paidClaims,
+        rejected: rejectedClaims,
+        totalPaidAmount: totalPaidAmount.toFixed(2),
+      },
+      supportedNetworks: SUPPORTED_REFUND_NETWORKS,
+    });
+  } catch (error) {
+    console.error('Get refunds overview error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

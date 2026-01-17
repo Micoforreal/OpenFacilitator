@@ -207,3 +207,71 @@ export interface WebhookRecord {
   updated_at: string;
 }
 
+/**
+ * Refund configuration per facilitator (global enable/disable)
+ */
+export interface RefundConfigRecord {
+  id: string;
+  facilitator_id: string;
+  enabled: number;               // 0 = disabled, 1 = enabled
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Resource owner: third party who uses a facilitator and wants refund protection
+ */
+export interface ResourceOwnerRecord {
+  id: string;
+  facilitator_id: string;
+  user_id: string;
+  refund_address: string | null;
+  name: string | null;
+  created_at: string;
+}
+
+/**
+ * Refund wallet record (one per resource owner per network)
+ */
+export interface RefundWalletRecord {
+  id: string;
+  resource_owner_id: string;
+  network: string;               // e.g., 'base', 'solana'
+  wallet_address: string;
+  encrypted_private_key: string;
+  created_at: string;
+}
+
+/**
+ * Registered server that can report failures (owned by resource owner)
+ */
+export interface RegisteredServerRecord {
+  id: string;
+  resource_owner_id: string;
+  url: string;
+  name: string | null;
+  api_key_hash: string;
+  active: number;                // 0 = inactive, 1 = active
+  created_at: string;
+}
+
+/**
+ * Claim for refund (scoped to resource owner)
+ */
+export interface ClaimRecord {
+  id: string;
+  resource_owner_id: string;
+  server_id: string;
+  original_tx_hash: string;
+  user_wallet: string;
+  amount: string;
+  asset: string;
+  network: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'expired';
+  payout_tx_hash: string | null;
+  reported_at: string;
+  paid_at: string | null;
+  expires_at: string | null;
+}
+
