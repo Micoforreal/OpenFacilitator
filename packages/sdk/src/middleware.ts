@@ -415,10 +415,11 @@ export function createPaymentMiddleware(config: PaymentMiddlewareConfig) {
         return;
       }
 
-      // Parse payment payload
+      // Parse payment payload (base64 encoded JSON)
       let paymentPayload: PaymentPayload;
       try {
-        paymentPayload = JSON.parse(paymentString);
+        const decoded = Buffer.from(paymentString, 'base64').toString('utf-8');
+        paymentPayload = JSON.parse(decoded);
         if (!isPaymentPayload(paymentPayload)) {
           throw new Error('Invalid payment payload structure');
         }
@@ -596,10 +597,11 @@ export function honoPaymentMiddleware(config: HonoPaymentConfig) {
       }, 402);
     }
 
-    // Parse payment payload
+    // Parse payment payload (base64 encoded JSON)
     let paymentPayload: PaymentPayload;
     try {
-      paymentPayload = JSON.parse(paymentString);
+      const decoded = atob(paymentString);
+      paymentPayload = JSON.parse(decoded);
       if (!isPaymentPayload(paymentPayload)) {
         throw new Error('Invalid payment payload structure');
       }
