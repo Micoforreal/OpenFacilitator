@@ -188,13 +188,13 @@ export default function BrandPage() {
                 Add the badge to your site automatically with our embed script:
               </p>
               <div className="bg-slate-900 rounded-lg p-4 font-mono text-sm text-slate-300 overflow-x-auto mb-4">
-                <code>{`<script src="https://openfacilitator.io/badge.js" data-facilitator="YOUR_SUBDOMAIN"></script>`}</code>
+                <code>{`<script src="https://openfacilitator.io/badge.js" data-facilitator="your-domain.com"></script>`}</code>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
                 Options via data attributes:
               </p>
               <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                <li><code className="text-slate-300">data-facilitator</code> - Your facilitator subdomain (required)</li>
+                <li><code className="text-slate-300">data-facilitator</code> - Your facilitator domain (required)</li>
                 <li><code className="text-slate-300">data-size</code> - &quot;small&quot; | &quot;medium&quot; | &quot;large&quot; (default: medium)</li>
                 <li><code className="text-slate-300">data-theme</code> - &quot;light&quot; | &quot;dark&quot; (default: light)</li>
               </ul>
@@ -209,14 +209,14 @@ export default function BrandPage() {
                 Programmatically verify if a facilitator supports refunds:
               </p>
               <div className="bg-slate-900 rounded-lg p-4 font-mono text-sm text-slate-300 overflow-x-auto mb-4">
-                <code>GET https://api.openfacilitator.io/api/verify?facilitator=your-subdomain</code>
+                <code>GET https://api.openfacilitator.io/api/verify?facilitator=your-domain.com</code>
               </div>
               <p className="text-sm text-muted-foreground mb-4">Response:</p>
               <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-slate-300 overflow-x-auto mb-4">
                 <pre>{`{
   "verified": true,
   "supportsRefunds": true,
-  "facilitator": "your-subdomain",
+  "facilitator": "your-domain.com",
   "facilitatorName": "Your Facilitator",
   "badgeUrl": "https://openfacilitator.io/badges/refund-protected.svg"
 }`}</pre>

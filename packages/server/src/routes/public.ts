@@ -1275,7 +1275,7 @@ router.get('/api/resource-owners/:resourceOwnerId/stats', requireAuth, async (re
  */
 router.get('/api/verify', async (req: Request, res: Response) => {
   try {
-    const { facilitator: facilitatorId } = req.query;
+    let { facilitator: facilitatorId } = req.query;
 
     if (!facilitatorId || typeof facilitatorId !== 'string') {
       res.status(400).json({
@@ -1286,7 +1286,24 @@ router.get('/api/verify', async (req: Request, res: Response) => {
       return;
     }
 
-    // Look up facilitator by subdomain or custom domain
+    const baseUrl = process.env.DASHBOARD_URL || 'https://openfacilitator.io';
+
+    // Handle special case: free facilitator (pay.openfacilitator.io)
+    if (facilitatorId === 'pay' || facilitatorId === 'pay.openfacilitator.io') {
+      // Free facilitator supports refunds if DEMO_REFUND_API_KEY is configured
+      const supportsRefunds = !!process.env.DEMO_REFUND_API_KEY;
+      res.json({
+        verified: true,
+        supportsRefunds,
+        facilitator: 'pay',
+        facilitatorName: 'OpenFacilitator (Free)',
+        badgeUrl: supportsRefunds ? `${baseUrl}/badges/refund-protected.svg` : null,
+        verifyUrl: `${baseUrl}/verify?facilitator=pay`,
+      });
+      return;
+    }
+
+    // Look up facilitator by custom domain
     const facilitator = getFacilitatorByDomainOrSubdomain(facilitatorId);
 
     if (!facilitator) {
@@ -1319,17 +1336,16 @@ router.get('/api/verify', async (req: Request, res: Response) => {
       }
     }
 
-    const baseUrl = process.env.DASHBOARD_URL || 'https://openfacilitator.io';
-
+    const facilitatorDomain = facilitator.custom_domain || facilitator.subdomain;
     res.json({
       verified: true,
       supportsRefunds,
-      facilitator: facilitator.subdomain,
+      facilitator: facilitatorDomain,
       facilitatorName: facilitator.name,
       badgeUrl: supportsRefunds
         ? `${baseUrl}/badges/refund-protected.svg`
         : null,
-      verifyUrl: `${baseUrl}/verify?facilitator=${facilitator.subdomain}`,
+      verifyUrl: `${baseUrl}/verify?facilitator=${facilitatorDomain}`,
     });
   } catch (error) {
     console.error('Verify error:', error);
