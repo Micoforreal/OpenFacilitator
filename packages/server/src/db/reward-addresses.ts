@@ -77,3 +77,14 @@ export function deleteRewardAddress(id: string): boolean {
   const result = stmt.run(id);
   return result.changes > 0;
 }
+
+/**
+ * Check if a user is enrolled in rewards (has at least one reward address)
+ * @param userId - The user ID to check
+ * @returns true if user has reward addresses, false otherwise
+ */
+export function isUserEnrolledInRewards(userId: string): boolean {
+  const db = getDatabase();
+  const stmt = db.prepare('SELECT 1 FROM reward_addresses WHERE user_id = ? LIMIT 1');
+  return stmt.get(userId) !== undefined;
+}

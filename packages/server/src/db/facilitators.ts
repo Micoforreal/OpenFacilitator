@@ -217,3 +217,14 @@ export function getFacilitatorByDomainOrSubdomain(identifier: string): Facilitat
   return getFacilitatorBySubdomain(identifier);
 }
 
+/**
+ * Check if a user owns at least one facilitator
+ * @param userId - The user ID to check (stored as lowercase in owner_address)
+ * @returns true if user owns at least one facilitator, false otherwise
+ */
+export function isFacilitatorOwner(userId: string): boolean {
+  const db = getDatabase();
+  const stmt = db.prepare('SELECT 1 FROM facilitators WHERE owner_address = ? LIMIT 1');
+  return stmt.get(userId.toLowerCase()) !== undefined;
+}
+
