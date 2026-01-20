@@ -136,10 +136,10 @@ Plans:
   2. Dashboard displays estimated rewards based on current volume and pool share
   3. Dashboard displays days remaining in current campaign period
   4. Progress view shows volume, threshold, estimated rewards, and multiplier status
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 08-01: Progress dashboard with volume and estimates
+- [ ] 08-01-PLAN.md — Progress dashboard with hero progress bar, reward estimates, address breakdown
 
 ### Phase 9: Wallet Connection
 **Goal**: Users can connect wallets for receiving claimed tokens
