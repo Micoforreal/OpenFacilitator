@@ -1,23 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { useAccount, useConnect, useSignMessage, useDisconnect as useEVMDisconnect, useConnectors } from 'wagmi';
+import { WalletIcon } from '@solana/wallet-adapter-react-ui';
 import { signAndEnroll } from '@/lib/solana/verification';
-import { signAndEnrollEVM } from '@/lib/evm/verification';
 import { useAuth } from '@/components/auth/auth-provider';
-import { Loader2, CheckCircle, AlertCircle, Wallet } from 'lucide-react';
-
-type ChainType = 'solana' | 'evm';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface EnrollmentModalProps {
   open: boolean;
@@ -29,41 +19,52 @@ type Status = 'idle' | 'connecting' | 'signing' | 'success' | 'error';
 export function EnrollmentModal({ open, onOpenChange }: EnrollmentModalProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [chainType, setChainType] = useState<ChainType>('solana');
 
   // Solana wallet hooks
   const wallet = useWallet();
-  const { publicKey, connected, disconnect } = wallet;
-  const { setVisible } = useWalletModal();
+  const { publicKey, connected, disconnect, select, connect, wallets, connecting, wallet: selectedWallet } = wallet;
   const { refetchRewardsStatus } = useAuth();
 
-  // EVM wallet hooks
-  const { address: evmAddress, isConnected: evmConnected } = useAccount();
-  const { connect: evmConnect } = useConnect();
-  const { signMessageAsync } = useSignMessage();
-  const { disconnect: evmDisconnect } = useEVMDisconnect();
-  const connectors = useConnectors();
+  // Find Phantom wallet
+  const phantomWallet = wallets.find(
+    (w) => w.adapter.name.toLowerCase() === 'phantom'
+  );
 
-  // Handle Solana wallet connection and automatic signing
+  // When Phantom is selected and we're in connecting status, trigger connect
   useEffect(() => {
-    if (status === 'connecting' && chainType === 'solana' && connected && publicKey) {
-      // Wallet connected, proceed to signing
+    if (status === 'connecting' && selectedWallet?.adapter.name.toLowerCase() === 'phantom' && !connected && !connecting) {
+      connect().catch((err) => {
+        console.error('Failed to connect:', err);
+        if (err instanceof Error && err.message.includes('User rejected')) {
+          setStatus('idle');
+        } else {
+          setErrorMessage(err instanceof Error ? err.message : 'Failed to connect wallet');
+          setStatus('error');
+        }
+      });
+    }
+  }, [status, selectedWallet, connected, connecting, connect]);
+
+  // Handle wallet connection and automatic signing
+  useEffect(() => {
+    if (connected && publicKey && status === 'connecting') {
       handleSign();
     }
-  }, [connected, publicKey, status, chainType]);
+  }, [connected, publicKey, status]);
 
-  // Handle EVM wallet connection and automatic signing
-  useEffect(() => {
-    if (status === 'connecting' && chainType === 'evm' && evmConnected && evmAddress) {
-      handleEVMSign();
+  const handleConnectPhantom = useCallback(() => {
+    if (!phantomWallet) {
+      setErrorMessage('Phantom wallet not found. Please install Phantom.');
+      setStatus('error');
+      return;
     }
-  }, [evmConnected, evmAddress, status, chainType]);
 
-  const handleConnect = useCallback(() => {
     setStatus('connecting');
     setErrorMessage(null);
-    setVisible(true);
-  }, [setVisible]);
+
+    // Select Phantom - the effect above will trigger connect() once selected
+    select(phantomWallet.adapter.name);
+  }, [phantomWallet, select]);
 
   const handleSign = useCallback(async () => {
     setStatus('signing');
@@ -80,45 +81,26 @@ export function EnrollmentModal({ open, onOpenChange }: EnrollmentModalProps) {
     }
   }, [wallet, refetchRewardsStatus]);
 
-  const handleEVMSign = useCallback(async () => {
-    if (!evmAddress) return;
-    setStatus('signing');
-    setErrorMessage(null);
-
-    const result = await signAndEnrollEVM(signMessageAsync, evmAddress);
-
-    if (result.success) {
-      await refetchRewardsStatus();
-      setStatus('success');
-    } else {
-      setErrorMessage(result.error || 'Failed to verify address');
-      setStatus('error');
-    }
-  }, [evmAddress, signMessageAsync, refetchRewardsStatus]);
-
   const handleTryAgain = useCallback(() => {
     setStatus('idle');
     setErrorMessage(null);
     disconnect();
-    evmDisconnect();
-  }, [disconnect, evmDisconnect]);
+  }, [disconnect]);
 
   const handleAddAnother = useCallback(() => {
     setStatus('idle');
     setErrorMessage(null);
     disconnect();
-    evmDisconnect();
-  }, [disconnect, evmDisconnect]);
+  }, [disconnect]);
 
   const handleClose = useCallback((newOpen: boolean) => {
     if (!newOpen) {
       setStatus('idle');
       setErrorMessage(null);
       disconnect();
-      evmDisconnect();
     }
     onOpenChange(newOpen);
-  }, [onOpenChange, disconnect, evmDisconnect]);
+  }, [onOpenChange, disconnect]);
 
   const handleDone = useCallback(() => {
     handleClose(false);
@@ -126,77 +108,38 @@ export function EnrollmentModal({ open, onOpenChange }: EnrollmentModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Register Pay-To Address</DialogTitle>
-          <DialogDescription>
-            Connect your pay-to wallet to start tracking volume for rewards.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col items-center py-6">
+      <DialogContent className="max-w-xs">
+        <div className="flex flex-col items-center text-center pt-2">
           {status === 'idle' && (
             <>
-              {/* Chain selector */}
-              <div className="flex gap-2 mb-6 w-full">
-                <Button
-                  variant={chainType === 'solana' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setChainType('solana')}
-                  className="flex-1"
-                >
-                  Solana
-                </Button>
-                <Button
-                  variant={chainType === 'evm' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setChainType('evm')}
-                  className="flex-1"
-                >
-                  EVM
-                </Button>
-              </div>
-
-              <div className="mb-6 p-4 rounded-full bg-primary/10">
-                <Wallet className="h-8 w-8 text-primary" />
-              </div>
-              <p className="text-center text-sm text-muted-foreground mb-6">
-                Connect your pay-to wallet and sign a message to verify ownership.
-                {chainType === 'solana' ? ' This will not cost any SOL.' : ' This will not cost any ETH.'}
+              <h2 className="text-xl font-semibold mb-2">Start Earning Rewards</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Connect your pay-to wallet to track volume and earn $OPEN.
               </p>
 
-              {/* Solana wallet connect */}
-              {chainType === 'solana' && (
-                <Button onClick={handleConnect} className="w-full">
-                  Connect Wallet
+              {phantomWallet ? (
+                <button
+                  onClick={handleConnectPhantom}
+                  className="wallet-adapter-button wallet-adapter-button-trigger"
+                >
+                  <WalletIcon wallet={phantomWallet} className="wallet-adapter-button-start-icon" />
+                  Connect Phantom
+                </button>
+              ) : (
+                <Button
+                  onClick={() => window.open('https://phantom.app/', '_blank')}
+                >
+                  Install Phantom
                 </Button>
-              )}
-
-              {/* EVM wallet connectors */}
-              {chainType === 'evm' && (
-                <div className="flex flex-col gap-2 w-full">
-                  {connectors.map((connector) => (
-                    <Button
-                      key={connector.uid}
-                      variant="outline"
-                      onClick={() => {
-                        setStatus('connecting');
-                        evmConnect({ connector });
-                      }}
-                    >
-                      {connector.name}
-                    </Button>
-                  ))}
-                </div>
               )}
             </>
           )}
 
-          {status === 'connecting' && (
+          {(status === 'connecting' || connecting) && (
             <>
               <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
               <p className="text-center text-muted-foreground">
-                Connecting wallet...
+                Connecting to Phantom...
               </p>
             </>
           )}
@@ -216,7 +159,7 @@ export function EnrollmentModal({ open, onOpenChange }: EnrollmentModalProps) {
                 <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
               <h3 className="font-semibold text-lg mb-2">Address Added!</h3>
-              <p className="text-center text-sm text-muted-foreground mb-6">
+              <p className="text-center text-sm text-muted-foreground mb-5">
                 Your volume will now be tracked for this address.
               </p>
               <div className="flex gap-3 w-full">

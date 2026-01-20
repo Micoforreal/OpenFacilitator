@@ -1,12 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { Navbar } from '@/components/navbar';
 import { RewardsLandingPage } from '@/components/rewards/landing-page';
 import { RewardsDashboard } from '@/components/rewards/rewards-dashboard';
-import { EnrollmentModal } from '@/components/rewards/enrollment-modal';
 import { useAuth } from '@/components/auth/auth-provider';
+
+// Dynamic import with SSR disabled to avoid wallet context issues during hydration
+const EnrollmentModal = dynamic(
+  () => import('@/components/rewards/enrollment-modal').then((mod) => mod.EnrollmentModal),
+  { ssr: false }
+);
 
 export default function RewardsPage() {
   const { isEnrolled, isLoading } = useAuth();

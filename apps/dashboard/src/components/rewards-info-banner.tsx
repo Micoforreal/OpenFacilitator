@@ -1,13 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/components/auth/auth-provider';
 import { Button } from '@/components/ui/button';
-import { EnrollmentModal } from '@/components/rewards/enrollment-modal';
 import { AddressList } from '@/components/rewards/address-list';
 import { api, type RewardsStatus } from '@/lib/api';
 import { ChevronDown, ChevronUp, Wallet, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+
+// Dynamic import with SSR disabled to avoid wallet context issues during hydration
+const EnrollmentModal = dynamic(
+  () => import('@/components/rewards/enrollment-modal').then((mod) => mod.EnrollmentModal),
+  { ssr: false }
+);
 
 export function RewardsInfoBanner() {
   const { isAuthenticated, isEnrolled, isFacilitatorOwner, refetchRewardsStatus } = useAuth();

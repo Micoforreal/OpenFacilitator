@@ -139,3 +139,8 @@ figure[data-rehype-pretty-code-figure] pre {
 figure[data-rehype-pretty-code-figure] {
   margin: 0;
 }
+
+/* Wallet adapter modal z-index fix - needs to appear above Radix dialogs (z-50) */
+.wallet-adapter-modal-wrapper {
+  z-index: 100 !important;
+}
