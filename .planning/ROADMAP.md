@@ -174,7 +174,7 @@ Plans:
 - [x] 10-03-PLAN.md — Confetti celebration, Twitter share, claim history display
 
 ### Phase 11: Dashboard Integration
-**Goal**: Rewards program is seamlessly integrated into existing dashboard
+**Goal**: Seamlessly integrate rewards into existing dashboard with navigation entry point, landing page for new users, and tabbed interface for enrolled users
 **Depends on**: Phase 10
 **Requirements**: UI-01, UI-02, UI-04, UI-05, UI-06
 **Success Criteria** (what must be TRUE):
@@ -183,12 +183,12 @@ Plans:
   3. Address management view accessible for adding/verifying/removing addresses
   4. Claim view shows amount and confirms transaction clearly
   5. History view shows past campaigns and claims with full detail
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01: Dashboard navigation and rewards tab
-- [ ] 11-02: Landing page and sign-up flow
-- [ ] 11-03: Final UI polish and integration testing
+- [ ] 11-01-PLAN.md — Navigation foundation: Tabs UI component, Rewards link in WalletDropdown with claimable badge
+- [ ] 11-02-PLAN.md — Landing page for non-enrolled users, tabbed dashboard container for enrolled users
+- [ ] 11-03-PLAN.md — Tab content components (Progress, Addresses, History) wired into dashboard
 
 ## Progress
 
