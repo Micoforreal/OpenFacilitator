@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { AddressCard } from './address-card';
+import { AddressCard, type AddressData } from './address-card';
+import { RemoveAddressDialog } from './remove-address-dialog';
 import { api, type RewardsStatus } from '@/lib/api';
 import { Plus, Wallet } from 'lucide-react';
 
@@ -46,18 +47,40 @@ export function AddressList({
   onAddAddress,
   onAddressRemoved,
 }: AddressListProps) {
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [addressToRemove, setAddressToRemove] = useState<AddressData | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
-  const handleRemove = async (id: string) => {
-    setRemovingId(id);
+  // Calculate if the address being removed is the last verified one
+  const verifiedCount = addresses.filter(a => a.verification_status === 'verified').length;
+  const isLastVerified = addressToRemove?.verification_status === 'verified' && verifiedCount === 1;
+
+  const handleRemoveClick = (address: AddressData) => {
+    setAddressToRemove(address);
+    setRemoveDialogOpen(true);
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!addressToRemove) return;
+
+    setIsRemoving(true);
     try {
-      await api.deleteRewardAddress(id);
+      await api.deleteRewardAddress(addressToRemove.id);
+      setRemoveDialogOpen(false);
+      setAddressToRemove(null);
       onAddressRemoved();
     } catch (error) {
       console.error('Failed to remove address:', error);
     } finally {
-      setRemovingId(null);
+      setIsRemoving(false);
     }
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setAddressToRemove(null);
+    }
+    setRemoveDialogOpen(open);
   };
 
   // Group addresses by chain type
@@ -117,8 +140,7 @@ export function AddressList({
                 <AddressCard
                   key={address.id}
                   address={address}
-                  onRemove={handleRemove}
-                  isRemoving={removingId === address.id}
+                  onRemoveClick={handleRemoveClick}
                 />
               ))}
             </div>
@@ -139,14 +161,22 @@ export function AddressList({
                 <AddressCard
                   key={address.id}
                   address={address}
-                  onRemove={handleRemove}
-                  isRemoving={removingId === address.id}
+                  onRemoveClick={handleRemoveClick}
                 />
               ))}
             </div>
           </div>
         )}
       </div>
+
+      <RemoveAddressDialog
+        open={removeDialogOpen}
+        onOpenChange={handleDialogClose}
+        address={addressToRemove}
+        isLastVerified={isLastVerified}
+        onConfirm={handleConfirmRemove}
+        isRemoving={isRemoving}
+      />
     </div>
   );
 }

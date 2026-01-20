@@ -7,20 +7,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Wallet, Loader2, CheckCircle, Clock, MoreVertical, Trash2 } from 'lucide-react';
+import { Wallet, CheckCircle, Clock, MoreVertical, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+export interface AddressData {
+  id: string;
+  address: string;
+  chain_type: 'solana' | 'evm';
+  verification_status: 'pending' | 'verified';
+  created_at: string;
+}
+
 interface AddressCardProps {
-  address: {
-    id: string;
-    address: string;
-    chain_type: 'solana' | 'evm';
-    verification_status: 'pending' | 'verified';
-    created_at: string;
-  };
-  onRemove?: (id: string) => void;
+  address: AddressData;
+  onRemoveClick?: (address: AddressData) => void;
   onVerify?: (address: string) => void;
-  isRemoving?: boolean;
 }
 
 function ChainBadge({ chainType }: { chainType: 'solana' | 'evm' }) {
@@ -38,7 +39,7 @@ function ChainBadge({ chainType }: { chainType: 'solana' | 'evm' }) {
   );
 }
 
-export function AddressCard({ address, onRemove, onVerify, isRemoving }: AddressCardProps) {
+export function AddressCard({ address, onRemoveClick, onVerify }: AddressCardProps) {
   // Truncate address: first 6...last 4 chars
   const truncatedAddress = `${address.address.slice(0, 6)}...${address.address.slice(-4)}`;
 
@@ -108,27 +109,21 @@ export function AddressCard({ address, onRemove, onVerify, isRemoving }: Address
           </Button>
         )}
 
-        {onRemove && (
+        {onRemoveClick && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground"
-                disabled={isRemoving}
               >
-                {isRemoving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <MoreVertical className="h-4 w-4" />
-                )}
+                <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive cursor-pointer"
-                onClick={() => onRemove(address.id)}
-                disabled={isRemoving}
+                onClick={() => onRemoveClick(address)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Remove
