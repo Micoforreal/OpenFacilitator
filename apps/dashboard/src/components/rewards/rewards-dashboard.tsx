@@ -5,6 +5,9 @@ import { Trophy, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ProgressTab } from './progress-tab';
+import { AddressesTab } from './addresses-tab';
+import { HistoryTab } from './history-tab';
 import { useAuth } from '@/components/auth/auth-provider';
 
 const VALID_TABS = ['progress', 'addresses', 'history'] as const;
@@ -57,21 +60,15 @@ export function RewardsDashboard() {
         </TabsList>
 
         <TabsContent value="progress" className="mt-6">
-          <div className="text-muted-foreground text-center py-12">
-            Progress content
-          </div>
+          <ProgressTab />
         </TabsContent>
 
         <TabsContent value="addresses" className="mt-6">
-          <div className="text-muted-foreground text-center py-12">
-            Addresses content
-          </div>
+          <AddressesTab />
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">
-          <div className="text-muted-foreground text-center py-12">
-            History content
-          </div>
+          <HistoryTab />
         </TabsContent>
       </Tabs>
     </div>
