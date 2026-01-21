@@ -481,18 +481,16 @@ function ClaimsSetupContent() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tight mb-4">Refund Protection Setup</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Set up automatic refund protection for your{' '}
-            <a
-              href="https://www.x402.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline inline-flex items-center gap-1"
-            >
-              x402-powered
-              <ExternalLink className="h-3 w-3" />
-            </a>
-            {' '}API. Generate refund wallets, register your servers, and manage claims.
+            Automatically refund users when your API fails. Register your server, fund a wallet, and you&apos;re set.
           </p>
+          <a
+            href="/docs/sdk/refunds"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-3"
+          >
+            <FileText className="h-4 w-4" />
+            Read the documentation
+            <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
 
         {/* Step Indicator */}
@@ -579,7 +577,7 @@ function ClaimsSetupContent() {
               )}
 
               <Button
-                onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(`/claims/setup?facilitator=${facilitator}`)}`)}
+                onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(`/refunds/setup?facilitator=${facilitator}`)}`)}
                 disabled={!facilitator}
                 className="w-full"
               >
@@ -590,7 +588,7 @@ function ClaimsSetupContent() {
               <p className="text-xs text-center text-muted-foreground">
                 Don&apos;t have an account?{' '}
                 <a
-                  href={`/auth/signup?callbackUrl=${encodeURIComponent(`/claims/setup?facilitator=${facilitator}`)}`}
+                  href={`/auth/signup?callbackUrl=${encodeURIComponent(`/refunds/setup?facilitator=${facilitator}`)}`}
                   className="text-primary hover:underline"
                 >
                   Sign up
@@ -954,7 +952,6 @@ app.post('/api/resource', honoPaymentMiddleware({
   }),
   refundProtection: {
     apiKey: process.env.REFUND_API_KEY,
-    facilitatorUrl: 'https://api.openfacilitator.io',
   },
 }), async (c) => {
   // Your handler - failures auto-reported
@@ -974,7 +971,6 @@ const paymentMiddleware = createPaymentMiddleware({
   }),
   refundProtection: {
     apiKey: process.env.REFUND_API_KEY,
-    facilitatorUrl: 'https://api.openfacilitator.io',
   },
 });
 
@@ -1021,17 +1017,29 @@ async function handleRequest(paymentPayload, requirements) {
                     />
                   </div>
 
-                  {/* Docs link */}
-                  <a
-                    href="/docs/sdk"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                  >
-                    <FileText className="h-4 w-4" />
-                    View full documentation
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {/* Docs links */}
+                  <div className="flex flex-wrap gap-4">
+                    <a
+                      href="/docs/sdk/refunds"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Refund Protection Guide
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    <a
+                      href="/docs/sdk"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      <FileText className="h-4 w-4" />
+                      SDK Documentation
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
                 </CardContent>
               </Card>
             )}

@@ -120,7 +120,7 @@ export default function Home() {
 
           {/* Refund Protection callout */}
           <Link
-            href="/claims/setup?facilitator=pay.openfacilitator.io"
+            href="/refunds/setup?facilitator=pay.openfacilitator.io"
             className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
           >
             <Shield className="w-4 h-4 text-primary" />
@@ -384,7 +384,7 @@ export default function Home() {
             Differentiate yourself in the x402 ecosystem. When your API fails after payment, automatically refund your users. Build trust and reduce support burden.
           </p>
           <Link
-            href="/claims/setup?facilitator=pay.openfacilitator.io"
+            href="/refunds/setup?facilitator=pay.openfacilitator.io"
             className="inline-flex items-center gap-2 text-primary hover:underline font-medium"
           >
             Set up refund protection

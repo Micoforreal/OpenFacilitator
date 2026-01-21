@@ -1,12 +1,17 @@
 import type { MDXComponents } from 'mdx/types';
 import { Callout } from '@/components/docs/Callout';
 import { PageHeader } from '@/components/docs/PageHeader';
+import { CodeTabs, CodeTabsList, CodeTab, CodeTabContent } from '@/components/docs/CodeTabs';
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
     ...components,
     Callout,
     PageHeader,
+    CodeTabs,
+    CodeTabsList,
+    CodeTab,
+    CodeTabContent,
 
     h1: ({ children }) => (
       <h1 className="text-3xl font-bold mb-2 text-foreground">{children}</h1>

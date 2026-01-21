@@ -1,331 +1,277 @@
 import { Callout } from '@/components/docs/Callout';
+import { CodeTabs, CodeTabsList, CodeTab, CodeTabContent } from '@/components/docs/CodeTabs';
 
-<PageHeader title="Refund Protection" description="Handle service failures after payment settlement by reporting them for automatic refunds." />
+<PageHeader title="Refund Protection" description="Automatically refund users when your service fails after payment." />
 
-## Why Refunds Matter
+If you're using OpenFacilitator—whether through `pay.openfacilitator.io` or your own white-labeled domain—you should be using our middleware to accept payments on your endpoints. It's the easiest way to handle x402 payments, and adding refund protection is just one config option.
 
-In x402 payment flows, payments are settled before service delivery. If your service fails after the payment has been processed, the user deserves a refund. OpenFacilitator's refund protection system automates this by allowing you to report failures, which triggers the facilitator to issue refunds from a dedicated refund wallet.
+<CodeTabs defaultValue="hono">
+  <CodeTabsList>
+    <CodeTab value="hono" label="Hono" />
+    <CodeTab value="express" label="Express" />
+    <CodeTab value="manual" label="Manual" />
+  </CodeTabsList>
 
-<Callout type="warning">
-**Critical scenario:** Payment succeeded, but service failed. The user has paid, but your service cannot deliver. This is when refund protection is essential.
-</Callout>
+  <CodeTabContent value="hono">
+## Hono Middleware
 
-## Prerequisites
+The SDK provides `honoPaymentMiddleware` that handles everything:
+- Decoding the X-PAYMENT header
+- Verifying the payment signature
+- Settling the transaction on-chain
+- **Reporting failures automatically** (if you enable refund protection)
 
-Before using refund protection, ensure:
+Here's a complete endpoint that accepts $1 USDC payments with refund protection:
 
-- **Registered server:** You have an API key from registering your server
-- **Funded refund wallet:** The facilitator has a refund wallet funded on your target networks
-- **Refunds enabled:** Your facilitator has refunds enabled (check with facilitator admin)
+```typescript
+import { Hono } from 'hono';
+import { honoPaymentMiddleware } from '@openfacilitator/sdk';
 
-## reportFailure
+const app = new Hono();
 
-The `reportFailure` function directly reports a service failure to the facilitator, creating a refund claim.
+app.post('/api/generate', honoPaymentMiddleware({
+  facilitator: 'pay.openfacilitator.io', // or your white-labeled domain
+  getRequirements: (c) => ({
+    scheme: 'exact',
+    network: 'base',
+    maxAmountRequired: '1000000', // $1 in USDC atomic units
+    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    payTo: '0xYourWalletAddress',
+  }),
+  refundProtection: {
+    apiKey: process.env.REFUND_API_KEY!,
+  },
+}), async (c) => {
+  // Your business logic here
+  // If this throws, the failure is automatically reported
+  const result = await generateSomething();
+  return c.json({ result });
+});
+```
 
-### Usage
+That's the entire implementation. The middleware:
+1. Returns 402 with payment requirements if no payment header
+2. Verifies and settles the payment
+3. Runs your handler
+4. If your handler throws, reports the failure for refund
+
+### Access Payment Context
+
+```typescript
+app.post('/api/resource', honoPaymentMiddleware(config), async (c) => {
+  const payment = c.get('paymentContext');
+  console.log('Paid by:', payment.userWallet);
+  console.log('Amount:', payment.amount);
+  console.log('Tx:', payment.transactionHash);
+  // ...
+});
+```
+  </CodeTabContent>
+
+  <CodeTabContent value="express">
+## Express Middleware
+
+The SDK provides `createPaymentMiddleware` for Express:
+
+```typescript
+import express from 'express';
+import { createPaymentMiddleware } from '@openfacilitator/sdk';
+
+const app = express();
+
+const paymentMiddleware = createPaymentMiddleware({
+  facilitator: 'pay.openfacilitator.io',
+  getRequirements: (req) => ({
+    scheme: 'exact',
+    network: 'base',
+    maxAmountRequired: '1000000',
+    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    payTo: '0xYourWalletAddress',
+  }),
+  refundProtection: {
+    apiKey: process.env.REFUND_API_KEY!,
+  },
+});
+
+app.post('/api/generate', paymentMiddleware, async (req, res, next) => {
+  try {
+    const result = await generateSomething();
+    res.json({ result });
+  } catch (error) {
+    next(error); // This triggers refund reporting
+  }
+});
+```
+
+### Access Payment Context
+
+```typescript
+app.post('/api/resource', paymentMiddleware, async (req, res) => {
+  const payment = req.paymentContext;
+  console.log('Paid by:', payment.userWallet);
+  // ...
+});
+```
+  </CodeTabContent>
+
+  <CodeTabContent value="manual">
+## Manual Reporting
+
+If you're not using the middleware, you can report failures directly with `reportFailure`:
 
 ```typescript
 import { reportFailure } from '@openfacilitator/sdk';
 
 const result = await reportFailure({
-  facilitatorUrl: 'https://api.openfacilitator.io',
-  apiKey: 'your-api-key',
-  originalTxHash: '0x123...',
-  userWallet: '0xabc...',
-  amount: '1000000',
+  facilitatorUrl: 'https://pay.openfacilitator.io',
+  apiKey: process.env.REFUND_API_KEY!,
+  originalTxHash: '0x123...', // from settlement
+  userWallet: '0xabc...',     // who to refund
+  amount: '1000000',          // atomic units
   asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   network: 'base',
   reason: 'Service unavailable',
 });
+
+if (result.success) {
+  console.log('Claim created:', result.claimId);
+} else {
+  console.error('Failed:', result.error);
+}
 ```
+
+<Callout type="warning">
+`reportFailure` does NOT throw—check `result.success`. You're responsible for tracking all the payment details yourself.
+</Callout>
 
 ### Parameters
 
 | Name | Type | Required | Description |
 | ---- | ---- | -------- | ----------- |
-| `facilitatorUrl` | `string` | Yes | The facilitator URL (e.g., `https://api.openfacilitator.io`) |
-| `apiKey` | `string` | Yes | Your server API key from registration |
-| `originalTxHash` | `string` | Yes | The transaction hash from the original payment settlement |
-| `userWallet` | `string` | Yes | The user's wallet address that should receive the refund |
-| `amount` | `string` | Yes | The refund amount in atomic units (e.g., `"1000000"` for $1 USDC) |
-| `asset` | `string` | Yes | The token contract address (e.g., Base USDC) |
-| `network` | `string` | Yes | Network identifier: `"base"`, `"solana"`, or CAIP-2 format |
-| `reason` | `string` | No | Optional description of why the service failed |
-
-### Response
-
-```typescript
-interface ReportFailureResponse {
-  success: boolean;
-  claimId?: string;  // Present when success is true
-  error?: string;    // Present when success is false
-}
-```
-
-<Callout type="tip">
-**Important:** `reportFailure` does NOT throw exceptions. It returns `success: false` with an error message. Always check the `success` field in the response.
-</Callout>
-
-### Example
-
-```typescript
-import { reportFailure, type ReportFailureResponse } from '@openfacilitator/sdk';
-
-async function handleServiceFailure(
-  txHash: string,
-  userWallet: string,
-  amount: string
-): Promise<void> {
-  // Report the failure to the facilitator
-  const result: ReportFailureResponse = await reportFailure({
-    facilitatorUrl: process.env.FACILITATOR_URL!,
-    apiKey: process.env.FACILITATOR_API_KEY!,
-    originalTxHash: txHash,
-    userWallet: userWallet,
-    amount: amount,
-    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Base USDC
-    network: 'base',
-    reason: 'Service temporarily unavailable',
-  });
-
-  if (result.success) {
-    console.log('Refund claim created:', result.claimId);
-    // Log the claim ID for tracking
-    // Notify the user that a refund has been initiated
-  } else {
-    console.error('Failed to create refund claim:', result.error);
-    // Handle the error appropriately
-    // You may want to retry or alert your team
-  }
-}
-```
-
-## withRefundProtection
-
-The `withRefundProtection` middleware wraps your service handler function to automatically report failures when exceptions are thrown.
-
-### Usage
-
-```typescript
-import { withRefundProtection, createPaymentContext } from '@openfacilitator/sdk';
-
-const protectedHandler = withRefundProtection(config, async (context) => {
-  // Your service logic here
-  // If this throws, failure is automatically reported
-});
-```
-
-### Configuration
-
-```typescript
-interface RefundProtectionConfig {
-  apiKey: string;
-  facilitatorUrl: string;
-  shouldReport?: (error: Error) => boolean;
-  onReport?: (claimId: string | undefined, error: Error) => void;
-  onReportError?: (reportError: Error, originalError: Error) => void;
-}
-```
-
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `apiKey` | `string` | Yes | Your server API key from registration |
 | `facilitatorUrl` | `string` | Yes | The facilitator URL |
-| `shouldReport` | `(error: Error) => boolean` | No | Custom filter to decide if error should be reported (default: always report) |
-| `onReport` | `(claimId: string \| undefined, error: Error) => void` | No | Called when failure is successfully reported |
-| `onReportError` | `(reportError: Error, originalError: Error) => void` | No | Called when reporting the failure fails |
+| `apiKey` | `string` | Yes | Your API key |
+| `originalTxHash` | `string` | Yes | The transaction hash from settlement |
+| `userWallet` | `string` | Yes | The user's wallet address to refund |
+| `amount` | `string` | Yes | Amount in atomic units |
+| `asset` | `string` | Yes | Token contract address |
+| `network` | `string` | Yes | Network: `"base"`, `"solana"`, or CAIP-2 |
+| `reason` | `string` | No | Why the service failed |
+  </CodeTabContent>
+</CodeTabs>
 
-### PaymentContext
+<Callout type="tip">
+**Not using the middleware yet?** You should be. It handles all the x402 protocol details so you can focus on your business logic. [See installation](/docs/sdk/installation).
+</Callout>
 
-The `PaymentContext` type contains information about the settled payment:
+---
+
+## Setup Steps
+
+### 1. Get an API Key
+
+Visit [your claims setup page](/refunds/setup?facilitator=pay.openfacilitator.io) to:
+- Register your server and generate an API key
+- Create a refund wallet on your target network(s)
+- Fund the wallet with USDC to pay refunds
+
+### 2. Add the Config
+
+Add the `refundProtection` object to your middleware config:
 
 ```typescript
-interface PaymentContext {
-  transactionHash: string;  // Transaction hash from settlement
-  userWallet: string;       // User's wallet address (payer)
-  amount: string;           // Payment amount in atomic units
-  asset: string;            // Asset/token address
-  network: string;          // Network identifier
+refundProtection: {
+  apiKey: process.env.REFUND_API_KEY!,
 }
 ```
 
-<Callout type="tip">
-Use the `createPaymentContext` helper to extract `PaymentContext` from your settle response and payment payload.
-</Callout>
+That's it. The `facilitatorUrl` defaults to your middleware's facilitator.
 
-### Example
+### 3. You're Done
+
+When your handler throws an error after payment settles, the SDK automatically reports it. Claims appear in your [dashboard](/refunds/setup?facilitator=pay.openfacilitator.io) where you can review and approve them.
+
+---
+
+## How It Works
+
+```
+1. User sends payment to your endpoint
+2. Middleware verifies and settles the payment ✓
+3. Your handler runs
+4. Handler throws an error (database timeout, API failure, etc.)
+5. Middleware catches the error
+6. Middleware calls reportFailure() with all the payment details
+7. Claim appears in your dashboard
+8. You review and approve → user gets refunded
+```
+
+The SDK knows the transaction hash, user wallet, amount, asset, and network from the settlement—you don't need to track any of it.
+
+---
+
+## Advanced Options
+
+### Filter Which Errors to Report
+
+Not all errors deserve refunds. Use `shouldReport` to filter:
 
 ```typescript
-import {
-  OpenFacilitator,
-  withRefundProtection,
-  createPaymentContext,
-  type PaymentPayload,
-  type PaymentRequirements,
-  type PaymentContext,
-} from '@openfacilitator/sdk';
+refundProtection: {
+  apiKey: process.env.REFUND_API_KEY!,
+  shouldReport: (error) => {
+    // Don't refund for user-caused errors
+    if (error.message.includes('Invalid input')) return false;
+    if (error.message.includes('Rate limited')) return false;
+    return true;
+  },
+}
+```
 
-// Initialize facilitator
-const facilitator = new OpenFacilitator({
-  apiKey: process.env.FACILITATOR_API_KEY!,
-  facilitatorUrl: process.env.FACILITATOR_URL!,
-});
+### Callbacks
 
-// Configure refund protection
-const refundConfig = {
-  apiKey: process.env.FACILITATOR_API_KEY!,
-  facilitatorUrl: process.env.FACILITATOR_URL!,
+Track what's happening:
+
+```typescript
+refundProtection: {
+  apiKey: process.env.REFUND_API_KEY!,
   onReport: (claimId, error) => {
-    console.log(`Refund claim created: ${claimId} for error: ${error.message}`);
+    console.log(`Refund claim ${claimId} created for: ${error.message}`);
   },
   onReportError: (reportError, originalError) => {
-    console.error(`Failed to report error: ${reportError.message}`);
+    console.error(`Failed to report refund: ${reportError.message}`);
+    // Alert your team
   },
-};
-
-// Define your service handler
-async function deliverService(context: PaymentContext): Promise<void> {
-  // Your service logic here
-  // Example: Generate API key, provision resource, etc.
-  const apiKey = await generateApiKey(context.userWallet);
-
-  if (!apiKey) {
-    throw new Error('Failed to generate API key');
-  }
-
-  // If successful, store transaction for tracking
-  await storeTransaction(context.transactionHash, context.userWallet, apiKey);
-}
-
-// Wrap handler with refund protection
-const protectedDelivery = withRefundProtection(refundConfig, deliverService);
-
-// Handle payment flow
-async function handlePayment(
-  payment: PaymentPayload,
-  requirements: PaymentRequirements
-): Promise<void> {
-  // Step 1: Verify payment
-  const verification = await facilitator.verify(payment, requirements);
-  if (!verification.valid) {
-    throw new Error(`Invalid payment: ${verification.reason}`);
-  }
-
-  // Step 2: Settle payment
-  const settlement = await facilitator.settle(payment, requirements);
-  if (!settlement.success) {
-    throw new Error(`Settlement failed: ${settlement.errorReason}`);
-  }
-
-  // Step 3: Create payment context
-  const context = createPaymentContext(settlement, payment, requirements);
-
-  // Step 4: Deliver service with refund protection
-  try {
-    await protectedDelivery(context);
-    console.log('Service delivered successfully');
-  } catch (error) {
-    // Error was already reported by withRefundProtection
-    // The original error is re-thrown after reporting
-    console.error('Service delivery failed:', error);
-    throw error; // Re-throw to caller
-  }
 }
 ```
 
-<Callout type="tip">
-**When to use which approach:**
+---
 
-- **`reportFailure`:** When you need direct control over error handling or want to report failures in specific scenarios
-- **`withRefundProtection`:** When you want automatic failure reporting for any exception thrown during service delivery
-</Callout>
+## Error Reference
 
-## Error Handling
+| Error | Meaning | Fix |
+| ----- | ------- | --- |
+| `"Invalid API key"` | Key is wrong or revoked | Check dashboard |
+| `"Server is not active"` | Registration inactive | Re-register |
+| `"Refunds are not enabled"` | Facilitator config | Contact admin |
+| `"Claim already exists"` | Already reported this tx | Safe to ignore |
+| `"No refund wallet configured"` | Missing wallet for network | Add in dashboard |
 
-Both `reportFailure` and `withRefundProtection` can encounter various error scenarios:
+---
 
-| Scenario | Error Message | Resolution |
-| -------- | ------------- | ---------- |
-| Invalid API key | `"Invalid API key"` | Verify your API key is correct and active |
-| Inactive server | `"Server is not active"` | Ensure your server is registered and active |
-| Refunds disabled | `"Refunds are not enabled for this facilitator"` | Contact facilitator admin to enable refunds |
-| Duplicate claim | `"Claim already exists for this transaction"` | This transaction was already reported |
-| No refund wallet | `"No refund wallet configured for network: {network}"` | Facilitator needs to configure a refund wallet for this network |
+## FAQ
 
-### Error Handling Example
+**Do I need to track payment details for refunds?**
 
-```typescript
-import { reportFailure } from '@openfacilitator/sdk';
+No. The middleware tracks everything. When your handler throws, it already knows the transaction hash, user wallet, amount, and network.
 
-async function safeReportFailure(
-  txHash: string,
-  userWallet: string,
-  amount: string
-): Promise<boolean> {
-  const result = await reportFailure({
-    facilitatorUrl: process.env.FACILITATOR_URL!,
-    apiKey: process.env.FACILITATOR_API_KEY!,
-    originalTxHash: txHash,
-    userWallet: userWallet,
-    amount: amount,
-    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    network: 'base',
-  });
+**What if the same transaction is reported twice?**
 
-  if (!result.success) {
-    // Handle specific error cases
-    if (result.error?.includes('Claim already exists')) {
-      console.log('Refund already reported for this transaction');
-      return true; // Already handled
-    }
+You get a "Claim already exists" error. No duplicate refunds—safe to ignore in retry logic.
 
-    if (result.error?.includes('No refund wallet')) {
-      console.error('Refund wallet not configured. Contact facilitator admin.');
-      // Alert your team
-      return false;
-    }
+**Can I do partial refunds?**
 
-    console.error('Unexpected error reporting failure:', result.error);
-    return false;
-  }
+Yes, with the manual `reportFailure` function. Set `amount` to any value up to the original payment.
 
-  console.log('Refund claim created:', result.claimId);
-  return true;
-}
-```
+**How fast are refunds processed?**
 
-<Callout type="tip">
-**Network formats:** Both simple format (`"base"`, `"solana"`) and CAIP-2 format (`"eip155:8453"`) are accepted for the `network` parameter.
-</Callout>
-
-## Troubleshooting
-
-### Q: When should I call reportFailure?
-
-**A:** Call `reportFailure` immediately after your service logic fails, but only after the payment has been successfully settled. If settlement fails, there's nothing to refund.
-
-### Q: What happens if I report the same transaction twice?
-
-**A:** The facilitator will return `success: false` with error `"Claim already exists for this transaction"`. This prevents duplicate refunds. You can safely ignore this error if you're implementing retry logic.
-
-### Q: How long does it take for the refund to be processed?
-
-**A:** Refund claims are processed asynchronously by the facilitator. The `reportFailure` call only creates the claim. Actual refund timing depends on the facilitator's processing schedule.
-
-### Q: What if reportFailure itself fails?
-
-**A:** If `reportFailure` returns `success: false`, the failure was not reported. You should log this error and potentially retry. Consider implementing exponential backoff for retries.
-
-### Q: Should I use reportFailure or withRefundProtection?
-
-**A:**
-- Use **`withRefundProtection`** if you want automatic failure reporting for any exception
-- Use **`reportFailure`** if you need fine-grained control over when failures are reported (e.g., only certain error types)
-
-### Q: Can I report partial refunds?
-
-**A:** Yes. The `amount` parameter in `reportFailure` can be any value up to the original payment amount. This is useful if your service was partially delivered.
-
-### Q: What network formats are supported?
-
-**A:** Both simple format (`"base"`, `"solana"`) and CAIP-2 format (`"eip155:8453"`, `"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"`) are supported.
+Claims appear instantly. After you approve, payout happens within minutes (depends on network).

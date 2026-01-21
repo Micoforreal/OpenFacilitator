@@ -124,7 +124,7 @@ export function RefundsSection({ facilitatorId, facilitator }: RefundsSectionPro
     },
   });
 
-  const setupUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/claims/setup?facilitator=${facilitatorIdentifier}`;
+  const setupUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/refunds/setup?facilitator=${facilitatorIdentifier}`;
 
   // Registration handler
   const handleRegister = async () => {

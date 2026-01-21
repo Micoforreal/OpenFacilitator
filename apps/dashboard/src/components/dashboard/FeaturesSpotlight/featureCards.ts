@@ -29,7 +29,7 @@ export function getFeatureCards(userState: UserState): FeatureCardConfig[] {
     ctaText: hasFacilitators ? 'Configure →' : 'Get Started →',
     ctaHref: hasFacilitators && firstFacilitatorId
       ? `/dashboard/${firstFacilitatorId}?tab=refunds`
-      : '/claims/setup?facilitator=pay.openfacilitator.io',
+      : '/refunds/setup?facilitator=pay.openfacilitator.io',
   };
 
   // Own Facilitator card
