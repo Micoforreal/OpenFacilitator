@@ -57,7 +57,14 @@ function FacilitatorIcon({ favicon, name }: { favicon?: string | null; name: str
       />
     );
   }
-  return <ChainBadge chainType="facilitator" />;
+  // Fallback to OpenFacilitator icon
+  return (
+    <img
+      src="/icon.svg"
+      alt={name}
+      className="w-5 h-5"
+    />
+  );
 }
 
 function formatUSDC(amount: string): string {
@@ -130,7 +137,10 @@ function FacilitatorsCard({
                   key={facilitator.id}
                   className="flex items-center justify-between py-2 border-b border-border last:border-0"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <Link
+                    href={`/facilitators/${facilitator.facilitatorId}`}
+                    className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+                  >
                     <FacilitatorIcon
                       favicon={facilitator.facilitatorFavicon}
                       name={displayName}
@@ -138,7 +148,7 @@ function FacilitatorsCard({
                     <span className="text-sm font-medium truncate">
                       {displayName}
                     </span>
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-3 text-sm flex-shrink-0">
                     <span className="font-medium">{formatUSDC(facilitator.volume)}</span>
                     <span className="text-muted-foreground w-14 text-right">
