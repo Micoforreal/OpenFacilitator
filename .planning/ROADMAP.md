@@ -49,10 +49,10 @@ Plans:
   2. `isPaymentPayloadV2()` narrows type to PaymentPayloadV2 in TypeScript
   3. `getSchemeNetwork()` extracts scheme/network from both v1 and v2 payloads
   4. `assertNever` catches unhandled version cases at compile time
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: [TBD during planning]
+- [ ] 13-01-PLAN.md — Add type guards (isPaymentPayloadV1/V2, isPaymentRequirementsV1/V2) and utilities (getSchemeNetwork, getVersion, assertNever)
 
 ### Phase 14: SDK Method Updates
 **Goal**: SDK methods handle both v1 and v2 formats; all types exported
@@ -97,11 +97,12 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 12 -> 13 -> 14 -> 15 (13 depends on 12, 14 depends on 13, 15 is independent)
+**Execution Order:** 12 -> 13 -> 14 -> 15 -> 16 (13 depends on 12, 14 depends on 13, 15 and 16 are independent)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 12. SDK Type Definitions | v1.1 | 1/1 | ✓ Complete | 2026-01-20 |
-| 13. SDK Type Guards & Utilities | v1.1 | 0/TBD | Not started | - |
+| 13. SDK Type Guards & Utilities | v1.1 | 0/1 | Not started | - |
 | 14. SDK Method Updates | v1.1 | 0/TBD | Not started | - |
 | 15. Refund Documentation | v1.1 | 0/TBD | Not started | - |
+| 16. Investigate Whitelabel Volume Tracking | v1.1 | 0/TBD | Not started | - |
