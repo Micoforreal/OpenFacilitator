@@ -77,10 +77,10 @@ Plans:
   2. Sidebar navigation includes refunds entry under SDK section
   3. `reportFailure` code examples demonstrate complete usage
   4. `withRefundProtection` middleware example shows end-to-end setup
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 15-01: [TBD during planning]
+- [ ] 15-01-PLAN.md — Create refund documentation page and sidebar navigation entry
 
 ### Phase 16: Investigate Whitelabel Volume Tracking
 **Goal**: Identify and fix why users with white-labeled facilitators see no volume tracked on rewards page
@@ -104,5 +104,5 @@ Plans:
 | 12. SDK Type Definitions | v1.1 | 1/1 | ✓ Complete | 2026-01-20 |
 | 13. SDK Type Guards & Utilities | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
 | 14. SDK Method Updates | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
-| 15. Refund Documentation | v1.1 | 0/TBD | Not started | - |
+| 15. Refund Documentation | v1.1 | 0/1 | Not started | - |
 | 16. Investigate Whitelabel Volume Tracking | v1.1 | 0/TBD | Not started | - |
