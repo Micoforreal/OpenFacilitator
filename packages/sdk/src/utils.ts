@@ -115,6 +115,30 @@ export function getVersion(payload: PaymentPayload): 1 | 2 {
   return payload.x402Version;
 }
 
+/**
+ * Safely extract x402 version from an unknown payment object.
+ * Provides backward compatibility for pre-versioning payloads.
+ *
+ * - Returns 1 if x402Version is undefined/missing (backward compatibility)
+ * - Returns 1 or 2 for valid versions
+ * - Throws descriptive error for unsupported versions
+ *
+ * Use this at method entry points to validate version before processing.
+ * For type-safe access after validation, use getVersion() instead.
+ */
+export function getVersionSafe(payment: unknown): 1 | 2 {
+  if (!payment || typeof payment !== 'object') {
+    return 1; // Backward compat: missing payload treated as v1
+  }
+  const obj = payment as Record<string, unknown>;
+  const version = obj.x402Version;
+  if (version === undefined) return 1; // Backward compat
+  if (version === 1 || version === 2) return version;
+  throw new Error(
+    `Unsupported x402 version: ${version}. SDK supports versions 1 and 2.`
+  );
+}
+
 // ============ Exhaustiveness Checking ============
 
 /**

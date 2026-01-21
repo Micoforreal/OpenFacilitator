@@ -49,6 +49,7 @@ export {
   isPaymentRequirementsV2,
   getSchemeNetwork,
   getVersion,
+  getVersionSafe,
   assertNever,
 } from './utils.js';
 
