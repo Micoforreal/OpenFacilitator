@@ -3,7 +3,7 @@
 ## Milestones
 
 - [x] **v1.0 MVP** - Phases 1-11 (shipped 2026-01-20)
-- [ ] **v1.1 SDK & Docs** - Phases 12-16 (in progress)
+- [x] **v1.1 SDK & Docs** - Phases 12-16 (shipped 2026-01-21)
 
 ## Phases
 
@@ -14,7 +14,7 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
 
 </details>
 
-### v1.1 SDK & Docs (In Progress)
+### v1.1 SDK & Docs (SHIPPED 2026-01-21)
 
 **Milestone Goal:** SDK supports x402 v2 format with type-safe discrimination; merchants have refund documentation.
 
@@ -22,7 +22,7 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
 - [x] **Phase 13: SDK Type Guards & Utilities** - Type guards and helper functions for version handling
 - [x] **Phase 14: SDK Method Updates** - Update verify/settle methods and exports
 - [x] **Phase 15: Refund Documentation** - Comprehensive refund guide for merchants
-- [ ] **Phase 16: Investigate Whitelabel Volume Tracking** - Debug why user with 2 white-labeled facilitators sees no volume on rewards page
+- [x] **Phase 16: Investigate Whitelabel Volume Tracking** - Debug why user with 2 white-labeled facilitators sees no volume on rewards page
 
 ## Phase Details
 
@@ -93,7 +93,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16-01-PLAN.md — Create facilitator enrollment markers and integrate into creation flow
+- [x] 16-01-PLAN.md — Create facilitator enrollment markers and integrate into creation flow
 
 ## Progress
 
@@ -105,4 +105,4 @@ Plans:
 | 13. SDK Type Guards & Utilities | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
 | 14. SDK Method Updates | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
 | 15. Refund Documentation | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
-| 16. Investigate Whitelabel Volume Tracking | v1.1 | 0/1 | Not started | - |
+| 16. Investigate Whitelabel Volume Tracking | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
