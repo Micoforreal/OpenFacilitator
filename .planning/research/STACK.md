@@ -1,334 +1,405 @@
-# Stack Research: Token Rewards Program
+# Stack Research: x402 v2 SDK Compliance
 
-**Project:** OpenFacilitator Token Rewards
-**Researched:** 2026-01-19
+**Project:** OpenFacilitator SDK v1.1
+**Researched:** 2026-01-20
 **Overall Confidence:** HIGH
+**Source:** @x402/core@2.2.0 npm package (verified against dist/cjs/mechanisms-CzuGzYsS.d.ts)
 
 ## Executive Summary
 
-Building a token rewards program on Solana with the existing OpenFacilitator stack is well-supported by mature libraries. The project already uses `@solana/web3.js@1.98.4` and `@solana/spl-token@0.4.14`, which are the correct choices for production. Signature verification should use `@noble/ed25519` (not tweetnacl) for security reasons. Volume aggregation uses native SQLite with better-sqlite3, no additional libraries needed.
+The @x402/core package v2.2.0 defines clear type definitions for both v1 and v2 PaymentPayload formats. The SDK update requires aligning OpenFacilitator's types with these official definitions. Key differences from the current SDK types have been identified and documented below.
 
 ---
 
-## Recommended Stack
+## Verified Type Definitions from @x402/core@2.2.0
 
-### Signature Verification
+### Network Type
 
-**Library:** `@noble/ed25519` ^3.0.0
-**Confidence:** HIGH
-**Rationale:**
-- Provides SUF-CMA (strong unforgeability under chosen message attacks) security guarantees
-- Fixes signature malleability vulnerabilities present in tweetnacl
-- 3-5x faster than tweetnacl in benchmarks
-- Zero dependencies, 5KB bundle size
-- Audited by cure53 (v1), cross-tested against noble-curves (v3)
-
-**Alternative:** `tweetnacl@1.0.3`
-**Why Not:** Has known signature malleability issues problematic in blockchain contexts. The Solana team has investigated replacement. Use only if React Native compatibility is required.
-
-**Installation:**
-```bash
-pnpm add @noble/ed25519@^3.0.0
+```typescript
+type Network = `${string}:${string}`;  // CAIP-2 format, e.g., "eip155:8453", "solana:mainnet"
 ```
 
-**Usage Pattern:**
-```typescript
-import { verify } from '@noble/ed25519';
-import bs58 from 'bs58';
+### PaymentPayloadV1 (x402 Version 1)
 
-async function verifyOwnership(
-  message: Uint8Array,
-  signature: Uint8Array,
-  publicKey: Uint8Array
-): Promise<boolean> {
-  return verify(signature, message, publicKey);
+```typescript
+type PaymentPayloadV1 = {
+  x402Version: 1;
+  scheme: string;
+  network: Network;
+  payload: Record<string, unknown>;
+};
+```
+
+**Key characteristics:**
+- `x402Version` is literal `1` (not generic number)
+- `scheme` and `network` at top level (flat structure)
+- `payload` is generic `Record<string, unknown>`
+
+### PaymentPayload (x402 Version 2 - Current)
+
+```typescript
+type PaymentPayload = {
+  x402Version: number;
+  resource: ResourceInfo;
+  accepted: PaymentRequirements;
+  payload: Record<string, unknown>;
+  extensions?: Record<string, unknown>;
+};
+
+interface ResourceInfo {
+  url: string;
+  description: string;
+  mimeType: string;
+}
+```
+
+**Key characteristics:**
+- `x402Version` is generic `number` (not literal `2`)
+- `resource` contains URL, description, mimeType (new in v2)
+- `accepted` contains the selected PaymentRequirements (nested structure)
+- `extensions` optional for protocol extensions
+- NO top-level `scheme` or `network` - these are inside `accepted`
+
+### PaymentRequirements (v2)
+
+```typescript
+type PaymentRequirements = {
+  scheme: string;
+  network: Network;
+  asset: string;
+  amount: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  extra: Record<string, unknown>;
+};
+```
+
+### PaymentRequirementsV1
+
+```typescript
+type PaymentRequirementsV1 = {
+  scheme: string;
+  network: Network;
+  maxAmountRequired: string;
+  resource: string;
+  description: string;
+  mimeType: string;
+  outputSchema: Record<string, unknown>;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+  extra: Record<string, unknown>;
+};
+```
+
+### PaymentRequired (402 Response - v2)
+
+```typescript
+type PaymentRequired = {
+  x402Version: number;
+  error?: string;
+  resource: ResourceInfo;
+  accepts: PaymentRequirements[];
+  extensions?: Record<string, unknown>;
+};
+```
+
+### PaymentRequiredV1 (402 Response - v1)
+
+```typescript
+type PaymentRequiredV1 = {
+  x402Version: 1;
+  error?: string;
+  accepts: PaymentRequirementsV1[];
+};
+```
+
+### VerifyRequest/Response
+
+```typescript
+type VerifyRequest = {
+  paymentPayload: PaymentPayload;
+  paymentRequirements: PaymentRequirements;
+};
+
+type VerifyResponse = {
+  isValid: boolean;
+  invalidReason?: string;
+  payer?: string;
+};
+```
+
+### SettleRequest/Response
+
+```typescript
+type SettleRequest = {
+  paymentPayload: PaymentPayload;
+  paymentRequirements: PaymentRequirements;
+};
+
+type SettleResponse = {
+  success: boolean;
+  errorReason?: string;
+  payer?: string;
+  transaction: string;
+  network: Network;
+};
+```
+
+### SupportedResponse
+
+```typescript
+type SupportedKind = {
+  x402Version: number;
+  scheme: string;
+  network: Network;
+  extra?: Record<string, unknown>;
+};
+
+type SupportedResponse = {
+  kinds: SupportedKind[];
+  extensions: string[];
+  signers: Record<string, string[]>;
+};
+```
+
+---
+
+## Comparison: Current SDK vs @x402/core
+
+### PaymentPayload Discrepancies
+
+| Field | Current SDK | @x402/core v2 | @x402/core v1 | Action |
+|-------|-------------|---------------|---------------|--------|
+| `x402Version` | `1 \| 2` | `number` | `1` (literal) | Keep union for SDK, matches both |
+| `scheme` | top-level | in `accepted` | top-level | Move to union type |
+| `network` | top-level | in `accepted` | top-level | Move to union type |
+| `resource` | absent | `ResourceInfo` | absent | Add to v2 type |
+| `accepted` | absent | `PaymentRequirements` | absent | Add to v2 type |
+| `extensions` | absent | optional | absent | Add to v2 type |
+| `payload.signature` | typed | `Record<string, unknown>` | generic | Keep generic |
+| `payload.authorization` | typed | `Record<string, unknown>` | generic | Keep generic |
+
+### PaymentRequirements Discrepancies
+
+| Field | Current SDK | @x402/core v2 | Action |
+|-------|-------------|---------------|--------|
+| `maxAmountRequired` | present | absent (use `amount`) | v1 only |
+| `amount` | absent | present | Add for v2 |
+| `resource` | optional string | absent (in parent) | v1 only |
+| `description` | optional | absent (in parent) | v1 only |
+| `mimeType` | optional | absent (in parent) | v1 only |
+| `outputSchema` | optional | absent | v1 only |
+| `extra` | optional | required | Make required |
+
+---
+
+## Recommended SDK Type Definitions
+
+### Union Type Approach
+
+```typescript
+import type {
+  PaymentPayload as X402PaymentPayloadV2,
+  PaymentPayloadV1 as X402PaymentPayloadV1,
+  PaymentRequirements as X402PaymentRequirements,
+  PaymentRequirementsV1 as X402PaymentRequirementsV1,
+  VerifyRequest,
+  VerifyResponse,
+  SettleRequest,
+  SettleResponse,
+  SupportedResponse,
+  Network,
+} from '@x402/core/types';
+
+// Re-export for SDK consumers
+export type {
+  VerifyResponse,
+  SettleResponse,
+  SupportedResponse,
+  Network,
+};
+
+// Union types for methods that handle both versions
+export type PaymentPayload = X402PaymentPayloadV1 | X402PaymentPayloadV2;
+export type PaymentRequirements = X402PaymentRequirementsV1 | X402PaymentRequirements;
+
+// Type guards for version discrimination
+export function isV1Payload(payload: PaymentPayload): payload is X402PaymentPayloadV1 {
+  return payload.x402Version === 1 && 'scheme' in payload;
+}
+
+export function isV2Payload(payload: PaymentPayload): payload is X402PaymentPayloadV2 {
+  return payload.x402Version >= 2 && 'accepted' in payload;
+}
+```
+
+### Alternative: Direct Re-export
+
+```typescript
+// Simply re-export from @x402/core
+export {
+  PaymentPayload,
+  PaymentPayloadV1,
+  PaymentRequirements,
+  PaymentRequirementsV1,
+  VerifyRequest,
+  VerifyResponse,
+  SettleRequest,
+  SettleResponse,
+  SupportedResponse,
+  Network,
+} from '@x402/core/types';
+
+export { PaymentPayloadV1, PaymentRequirementsV1 } from '@x402/core/types/v1';
+```
+
+---
+
+## Additional Types from @x402/core
+
+### For Facilitator Implementation
+
+```typescript
+interface SchemeNetworkFacilitator {
+  readonly scheme: string;
+  readonly caipFamily: string;  // e.g., "eip155:*", "solana:*"
+  getExtra(network: Network): Record<string, unknown> | undefined;
+  getSigners(network: string): string[];
+  verify(payload: PaymentPayload, requirements: PaymentRequirements): Promise<VerifyResponse>;
+  settle(payload: PaymentPayload, requirements: PaymentRequirements): Promise<SettleResponse>;
+}
+```
+
+### For Client Implementation
+
+```typescript
+interface SchemeNetworkClient {
+  readonly scheme: string;
+  createPaymentPayload(
+    x402Version: number,
+    paymentRequirements: PaymentRequirements
+  ): Promise<Pick<PaymentPayload, "x402Version" | "payload">>;
+}
+```
+
+### Error Classes
+
+```typescript
+declare class VerifyError extends Error {
+  readonly invalidReason?: string;
+  readonly payer?: string;
+  readonly statusCode: number;
+  constructor(statusCode: number, response: VerifyResponse);
+}
+
+declare class SettleError extends Error {
+  readonly errorReason?: string;
+  readonly payer?: string;
+  readonly transaction: string;
+  readonly network: Network;
+  readonly statusCode: number;
+  constructor(statusCode: number, response: SettleResponse);
 }
 ```
 
 ---
 
-### Sign In With Solana (SIWS) - Optional
+## Import Paths
 
-**Library:** `@web3auth/sign-in-with-solana` ^5.0.0
-**Confidence:** MEDIUM
-**Rationale:**
-- Standardized message format based on EIP-4361 (SIWE)
-- Provides message construction and verification utilities
-- Good for consistent UX if building wallet-connect flows
+From @x402/core v2.2.0:
 
-**Alternative:** Direct signature verification with `@noble/ed25519`
-**When to use direct verification:** For simple "prove you own this address" flows without full session management, direct verification is simpler and has fewer dependencies.
-
-**Why MEDIUM confidence:** Only 5 projects use this in npm registry. For basic ownership proof, direct ed25519 verification is sufficient and more widely tested.
-
----
-
-### Solana Core (KEEP EXISTING)
-
-**Library:** `@solana/web3.js` ^1.98.4
-**Confidence:** HIGH
-**Rationale:**
-- Already in use in the project
-- Production-stable, 4,911+ dependents
-- v2.0 exists but ecosystem adoption is still maturing
-- Most dependencies (including @solana/spl-token) still target v1.x
-
-**Do NOT upgrade to 2.0 yet because:**
-- Breaking API changes require significant refactoring
-- @solana/spl-token 0.4.x is designed for web3.js 1.x
-- Anchor and many ecosystem tools don't support v2 yet
-- December 2024 supply chain attack on 1.95.5/1.95.6 was patched; current 1.98.4 is safe
-
-**Migration path:** When ready to upgrade, use `@solana/kit` (the new name for web3.js 2.x) and `@solana-program/token` for Token Program interactions.
-
----
-
-### SPL Token Transfers (KEEP EXISTING)
-
-**Library:** `@solana/spl-token` ^0.4.14
-**Confidence:** HIGH
-**Rationale:**
-- Already in use in the project
-- Stable, well-documented
-- Supports both Token Program and Token-2022
-
-**Key functions for rewards distribution:**
 ```typescript
+// Main exports (v2 types as default)
 import {
-  getOrCreateAssociatedTokenAccount,
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddress,
-} from '@solana/spl-token';
-```
+  PaymentPayload,
+  PaymentRequirements,
+  PaymentRequired,
+  VerifyRequest,
+  VerifyResponse,
+  SettleRequest,
+  SettleResponse,
+  SupportedResponse,
+  Network,
+  VerifyError,
+  SettleError,
+} from '@x402/core/types';
 
-**Best Practices:**
-1. Use `createTransferCheckedInstruction` (not `createTransferInstruction`) - validates decimals
-2. Use `getOrCreateAssociatedTokenAccount` to handle recipient ATA creation
-3. Check if source != destination before transfer (same-account transfers always succeed but do nothing)
-4. Include priority fees for reliable execution during congestion
+// V1 specific types
+import {
+  PaymentPayloadV1,
+  PaymentRequirementsV1,
+  PaymentRequiredV1,
+  VerifyRequestV1,
+  SettleRequestV1,
+  SettleResponseV1,
+  SupportedResponseV1,
+} from '@x402/core/types/v1';
+
+// Facilitator types
+import { x402Facilitator } from '@x402/core/facilitator';
+
+// Client types
+import { x402Client, x402HTTPClient } from '@x402/core/client';
+
+// Server types
+import { x402ResourceServer, x402HTTPResourceServer } from '@x402/core/server';
+```
 
 ---
 
-### Database (KEEP EXISTING)
+## Package Installation
 
-**Library:** `better-sqlite3` ^11.6.0
-**Confidence:** HIGH
-**Rationale:**
-- Already in use in the project
-- Synchronous API is simpler for volume aggregation queries
-- Native SQLite aggregation functions (SUM, COUNT, AVG) are performant
-- No need for additional ORM - raw SQL with prepared statements is sufficient
+```bash
+# Add or update @x402/core
+pnpm add @x402/core@^2.2.0
+```
 
-**Volume Aggregation Pattern:**
+---
+
+## Implementation Recommendations
+
+### 1. Use @x402/core Types Directly
+
+Instead of maintaining separate type definitions, import directly from @x402/core. This ensures type compatibility and reduces maintenance burden.
+
+### 2. Create Union Types for SDK Methods
+
+The SDK's `verify()` and `settle()` methods should accept a union type that handles both v1 and v2 payloads:
+
 ```typescript
-// Example: Aggregate volume by user and period
-const stmt = db.prepare(`
-  SELECT
-    user_id,
-    SUM(amount_usd) as total_volume,
-    COUNT(*) as transaction_count
-  FROM transactions
-  WHERE created_at >= ? AND created_at < ?
-  GROUP BY user_id
-  HAVING SUM(amount_usd) >= ?
-`);
-
-const qualifiedUsers = stmt.all(periodStart, periodEnd, minThreshold);
+async verify(
+  paymentPayload: PaymentPayloadV1 | PaymentPayload,
+  paymentRequirements: PaymentRequirementsV1 | PaymentRequirements
+): Promise<VerifyResponse>
 ```
 
-**Alternative:** Drizzle ORM
-**Why not recommended:** Adds complexity without significant benefit for this use case. better-sqlite3 with raw SQL is more performant for aggregation queries and the team already has it working.
+### 3. Add Type Guards
 
----
+Provide type guard functions for consumers who need to discriminate between versions:
 
-### Nonce Management (for replay protection)
-
-**Library:** No additional library needed
-**Confidence:** HIGH
-**Rationale:**
-- Store nonces in SQLite database
-- Generate with `crypto.randomUUID()` or `nanoid` (already in project)
-- Mark as used after successful verification
-
-**Schema addition:**
-```sql
-CREATE TABLE signature_nonces (
-  nonce TEXT PRIMARY KEY,
-  wallet_address TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  used_at INTEGER,
-  expires_at INTEGER NOT NULL
-);
-
-CREATE INDEX idx_nonces_wallet ON signature_nonces(wallet_address);
-CREATE INDEX idx_nonces_expires ON signature_nonces(expires_at);
-```
-
-**Pattern:**
-1. Generate nonce, store with expiration (e.g., 5 minutes)
-2. Include nonce in message user signs
-3. Verify signature includes expected nonce
-4. Mark nonce as used
-5. Cleanup expired nonces periodically
-
----
-
-### Token Distribution (Batch Transfers)
-
-**Library:** No additional library needed for basic distribution
-**Confidence:** HIGH
-**Rationale:**
-- Use `@solana/web3.js` Transaction with multiple instructions
-- Batch up to ~20 transfers per transaction (compute budget dependent)
-
-**For large-scale airdrops (1000+ recipients):**
-**Library:** Consider `Streamflow` or build custom batching
-**Confidence:** MEDIUM
-**Rationale:** Streamflow handles 1M+ recipient distributions but adds external dependency. For <1000 recipients, custom batching is sufficient.
-
-**Batching Pattern:**
 ```typescript
-import { Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
-
-async function batchTransfer(
-  transfers: Array<{ recipient: PublicKey; amount: bigint }>,
-  batchSize = 20
-) {
-  for (let i = 0; i < transfers.length; i += batchSize) {
-    const batch = transfers.slice(i, i + batchSize);
-    const tx = new Transaction();
-
-    for (const { recipient, amount } of batch) {
-      const recipientAta = await getAssociatedTokenAddress(mint, recipient);
-      // Add create ATA instruction if needed
-      // Add transfer instruction
-    }
-
-    await sendAndConfirmTransaction(connection, tx, [payer]);
-  }
+function isV1Payload(p: PaymentPayloadV1 | PaymentPayload): p is PaymentPayloadV1 {
+  return p.x402Version === 1 && 'scheme' in p && !('accepted' in p);
 }
 ```
 
----
+### 4. Deprecate Custom PaymentAuthorization
 
-## What NOT to Use
-
-### tweetnacl
-**Reason:** Signature malleability vulnerability (GitHub issue #253). Use `@noble/ed25519` instead.
-
-### @solana/web3.js 2.x (for now)
-**Reason:** Ecosystem not ready. @solana/spl-token 0.4.x requires 1.x. Migrate later when Anchor and ecosystem support improves.
-
-### Drizzle ORM (for this feature)
-**Reason:** Overkill for volume aggregation. better-sqlite3 raw SQL is simpler and the project already uses it.
-
-### External rewards platforms (Streamflow, etc.)
-**Reason:** For a rewards program of this scale (<10K users initially), native implementation is simpler and avoids external dependencies. Reconsider if distribution scale exceeds 10K+ recipients per batch.
-
-### Session-based wallet auth libraries
-**Reason:** OpenFacilitator already has Better Auth for user sessions. Wallet verification is purely for "prove ownership" not "login with wallet."
-
----
-
-## Integration Notes
-
-### Existing Stack Compatibility
-
-| Existing | New Addition | Compatible? |
-|----------|--------------|-------------|
-| @solana/web3.js 1.98.4 | @noble/ed25519 3.0.0 | Yes - independent crypto library |
-| @solana/spl-token 0.4.14 | - | Already suitable for transfers |
-| better-sqlite3 11.6.0 | - | Already suitable for aggregation |
-| Better Auth | - | Complements - user auth vs wallet ownership |
-| bs58 6.0.0 | - | Already in project, used for address encoding |
-
-### New Dependencies Summary
-
-```bash
-# Only one new dependency needed:
-pnpm add @noble/ed25519@^3.0.0
-```
-
-### Database Schema Additions
-
-```sql
--- Registered pay-to addresses
-CREATE TABLE registered_addresses (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  wallet_address TEXT NOT NULL UNIQUE,
-  chain TEXT NOT NULL DEFAULT 'solana',
-  verified_at INTEGER NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-
--- Signature nonces for replay protection
-CREATE TABLE signature_nonces (
-  nonce TEXT PRIMARY KEY,
-  wallet_address TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  used_at INTEGER,
-  expires_at INTEGER NOT NULL
-);
-
--- Volume tracking (may already exist, extend as needed)
-CREATE TABLE volume_snapshots (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  period_start INTEGER NOT NULL,
-  period_end INTEGER NOT NULL,
-  total_volume_usd INTEGER NOT NULL, -- Store as cents
-  transaction_count INTEGER NOT NULL,
-  calculated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-
--- Reward claims
-CREATE TABLE reward_claims (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  wallet_address TEXT NOT NULL,
-  volume_snapshot_id TEXT REFERENCES volume_snapshots(id),
-  token_amount TEXT NOT NULL, -- Store as string for bigint precision
-  status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
-  tx_signature TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  processed_at INTEGER
-);
-
-CREATE INDEX idx_claims_user ON reward_claims(user_id);
-CREATE INDEX idx_claims_status ON reward_claims(status);
-```
+The current SDK defines a custom `PaymentAuthorization` type. In @x402/core, the payload is `Record<string, unknown>`. Either:
+- Keep as convenience type but mark as SDK-specific
+- Remove and use generic payload typing
 
 ---
 
 ## Sources
 
-### Signature Verification
-- [@noble/ed25519 npm](https://www.npmjs.com/package/@noble/ed25519) - Latest version 3.0.0
-- [noble-ed25519 GitHub](https://github.com/paulmillr/noble-ed25519) - Security properties documentation
-- [tweetnacl malleability issue](https://github.com/dchest/tweetnacl-js/issues/253) - Known vulnerability
-- [Solana web3.js tweetnacl replacement investigation](https://github.com/solana-labs/solana/issues/26933)
-
-### Solana SDK
-- [@solana/web3.js npm](https://www.npmjs.com/package/@solana/web3.js) - Version 1.98.4
-- [@solana/spl-token npm](https://www.npmjs.com/package/@solana/spl-token) - Version 0.4.14
-- [Solana Cookbook - Sign Message](https://solana.com/developers/cookbook/wallets/sign-message)
-- [Helius - web3.js 2.0 migration](https://www.helius.dev/blog/how-to-start-building-with-the-solana-web3-js-2-0-sdk)
-
-### SPL Token Transfers
-- [QuickNode SPL Transfer Guide](https://www.quicknode.com/guides/solana-development/spl-tokens/how-to-transfer-spl-tokens-on-solana)
-- [Solana Token Basics](https://solana.com/docs/tokens/basics/transfer-tokens)
-- [Helius Token Transfer Guide](https://www.helius.dev/blog/solana-dev-101-how-to-transfer-solana-tokens-with-typescript)
-
-### Sign In With Solana
-- [@web3auth/sign-in-with-solana](https://www.npmjs.com/package/@web3auth/sign-in-with-solana) - Version 5.0.0
-- [SIWS Verification Docs](https://siws.web3auth.io/verify)
-- [Phantom SIWS GitHub](https://github.com/phantom/sign-in-with-solana)
-
-### Nonce & Replay Protection
-- [Solana Durable Nonces](https://solana.com/developers/courses/offline-transactions/durable-nonces)
-- [Helius Durable Nonces](https://www.helius.dev/blog/solana-transactions)
-
-### Token Distribution
-- [Streamflow Token Distribution](https://streamflow.finance/)
-- [Solana Airdrop Best Practices](https://www.blockchainappfactory.com/blog/solana-token-airdrop-best-practices-for-user-growth/)
+- **@x402/core@2.2.0** - npm package, downloaded and extracted
+  - dist/cjs/mechanisms-CzuGzYsS.d.ts (lines 1-270)
+  - dist/cjs/types/index.d.ts
+  - dist/cjs/types/v1/index.d.ts
+  - dist/cjs/facilitator/index.d.ts
+  - dist/cjs/client/index.d.ts
+  - dist/cjs/server/index.d.ts
+- npm registry: https://registry.npmjs.org/@x402/core
+- Published: "a week ago" (circa 2026-01-13)
