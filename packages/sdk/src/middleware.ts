@@ -302,15 +302,17 @@ export function honoRefundMiddleware(config: HonoRefundConfig) {
 export function createPaymentContext(
   settleResponse: { transaction: string; payer: string; network: string },
   paymentPayload: Record<string, unknown>,
-  requirements?: { maxAmountRequired?: string; asset?: string }
+  requirements?: { maxAmountRequired?: string; amount?: string; asset?: string }
 ): PaymentContext {
   // Try to extract amount from various payload structures
   const payload = paymentPayload.payload as Record<string, unknown> | undefined;
   const authorization = payload?.authorization as Record<string, unknown> | undefined;
 
   // Amount: try payload.authorization.amount, then fall back to requirements
+  // Support both v1 (maxAmountRequired) and v2 (amount) requirement formats
   const amount = (authorization?.amount as string) ||
                  (payload?.amount as string) ||
+                 requirements?.amount ||
                  requirements?.maxAmountRequired ||
                  '0';
 
@@ -411,16 +413,31 @@ export function createPaymentMiddleware(config: PaymentMiddlewareConfig) {
               extra.supportsRefunds = true;
             }
 
-            return {
-              scheme: requirements.scheme,
-              network: requirements.network,
-              maxAmountRequired: requirements.maxAmountRequired,
-              asset: requirements.asset,
-              payTo: requirements.payTo,
-              resource: requirements.resource || req.url,
-              description: requirements.description,
-              ...(Object.keys(extra).length > 0 ? { extra } : {}),
-            };
+            // Handle both v1 and v2 payment requirements
+            if ('maxAmountRequired' in requirements) {
+              // PaymentRequirementsV1
+              return {
+                scheme: requirements.scheme,
+                network: requirements.network,
+                maxAmountRequired: requirements.maxAmountRequired,
+                asset: requirements.asset,
+                payTo: requirements.payTo,
+                resource: requirements.resource || req.url,
+                description: requirements.description,
+                ...(Object.keys(extra).length > 0 ? { extra } : {}),
+              };
+            } else {
+              // PaymentRequirementsV2
+              return {
+                scheme: requirements.scheme,
+                network: requirements.network,
+                amount: requirements.amount,
+                asset: requirements.asset,
+                payTo: requirements.payTo,
+                maxTimeoutSeconds: requirements.maxTimeoutSeconds,
+                extra: { ...extra, ...requirements.extra },
+              };
+            }
           });
 
           res.status(402).json({
@@ -595,16 +612,31 @@ export function honoPaymentMiddleware(config: HonoPaymentConfig) {
           extra.supportsRefunds = true;
         }
 
-        return {
-          scheme: requirements.scheme,
-          network: requirements.network,
-          maxAmountRequired: requirements.maxAmountRequired,
-          asset: requirements.asset,
-          payTo: requirements.payTo,
-          resource: requirements.resource || c.req.url,
-          description: requirements.description,
-          ...(Object.keys(extra).length > 0 ? { extra } : {}),
-        };
+        // Handle both v1 and v2 payment requirements
+        if ('maxAmountRequired' in requirements) {
+          // PaymentRequirementsV1
+          return {
+            scheme: requirements.scheme,
+            network: requirements.network,
+            maxAmountRequired: requirements.maxAmountRequired,
+            asset: requirements.asset,
+            payTo: requirements.payTo,
+            resource: requirements.resource || c.req.url,
+            description: requirements.description,
+            ...(Object.keys(extra).length > 0 ? { extra } : {}),
+          };
+        } else {
+          // PaymentRequirementsV2
+          return {
+            scheme: requirements.scheme,
+            network: requirements.network,
+            amount: requirements.amount,
+            asset: requirements.asset,
+            payTo: requirements.payTo,
+            maxTimeoutSeconds: requirements.maxTimeoutSeconds,
+            extra: { ...extra, ...requirements.extra },
+          };
+        }
       });
 
       return c.json({
