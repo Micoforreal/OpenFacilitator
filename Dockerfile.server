@@ -33,19 +33,14 @@ RUN apk add --no-cache wget
 
 WORKDIR /app
 
-# Copy built files
-COPY --from=builder /app/packages/core/dist ./packages/core/dist
-COPY --from=builder /app/packages/core/package.json ./packages/core/
-COPY --from=builder /app/packages/sdk/dist ./packages/sdk/dist
-COPY --from=builder /app/packages/sdk/package.json ./packages/sdk/
-COPY --from=builder /app/packages/server/dist ./packages/server/dist
-COPY --from=builder /app/packages/server/package.json ./packages/server/
+# Copy built files and node_modules from builder (includes compiled native modules)
+COPY --from=builder /app/packages/core ./packages/core
+COPY --from=builder /app/packages/sdk ./packages/sdk
+COPY --from=builder /app/packages/server ./packages/server
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
 
 # Create data directory with proper permissions
 RUN mkdir -p /data && chmod 755 /data
