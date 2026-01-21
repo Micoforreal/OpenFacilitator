@@ -21,7 +21,7 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
 - [x] **Phase 12: SDK Type Definitions** - Define versioned PaymentPayload and PaymentRequirements types
 - [x] **Phase 13: SDK Type Guards & Utilities** - Type guards and helper functions for version handling
 - [x] **Phase 14: SDK Method Updates** - Update verify/settle methods and exports
-- [ ] **Phase 15: Refund Documentation** - Comprehensive refund guide for merchants
+- [x] **Phase 15: Refund Documentation** - Comprehensive refund guide for merchants
 - [ ] **Phase 16: Investigate Whitelabel Volume Tracking** - Debug why user with 2 white-labeled facilitators sees no volume on rewards page
 
 ## Phase Details
@@ -80,7 +80,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 15-01-PLAN.md — Create refund documentation page and sidebar navigation entry
+- [x] 15-01-PLAN.md — Create refund documentation page and sidebar navigation entry
 
 ### Phase 16: Investigate Whitelabel Volume Tracking
 **Goal**: Identify and fix why users with white-labeled facilitators see no volume tracked on rewards page
@@ -104,5 +104,5 @@ Plans:
 | 12. SDK Type Definitions | v1.1 | 1/1 | ✓ Complete | 2026-01-20 |
 | 13. SDK Type Guards & Utilities | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
 | 14. SDK Method Updates | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
-| 15. Refund Documentation | v1.1 | 0/1 | Not started | - |
+| 15. Refund Documentation | v1.1 | 1/1 | ✓ Complete | 2026-01-21 |
 | 16. Investigate Whitelabel Volume Tracking | v1.1 | 0/TBD | Not started | - |

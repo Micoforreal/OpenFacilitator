@@ -24,10 +24,10 @@ Requirements for SDK v2 compliance and refund documentation.
 
 ### Refund Documentation
 
-- [ ] **DOCS-01**: MDX page at `/docs/sdk/refunds/` with refund guide content
-- [ ] **DOCS-02**: Sidebar navigation entry for refunds page
-- [ ] **DOCS-03**: Code examples for `reportFailure` usage
-- [ ] **DOCS-04**: Code examples for `withRefundProtection` middleware
+- [x] **DOCS-01**: MDX page at `/docs/sdk/refunds/` with refund guide content
+- [x] **DOCS-02**: Sidebar navigation entry for refunds page
+- [x] **DOCS-03**: Code examples for `reportFailure` usage
+- [x] **DOCS-04**: Code examples for `withRefundProtection` middleware
 
 ## Future Requirements
 
@@ -67,10 +67,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SDK-10 | Phase 14 | Complete |
 | SDK-11 | Phase 14 | Complete |
 | SDK-12 | Phase 14 | Complete |
-| DOCS-01 | Phase 15 | Pending |
-| DOCS-02 | Phase 15 | Pending |
-| DOCS-03 | Phase 15 | Pending |
-| DOCS-04 | Phase 15 | Pending |
+| DOCS-01 | Phase 15 | Complete |
+| DOCS-02 | Phase 15 | Complete |
+| DOCS-03 | Phase 15 | Complete |
+| DOCS-04 | Phase 15 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 16 total
@@ -79,4 +79,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-21 after Phase 14 completion*
+*Last updated: 2026-01-21 after Phase 15 completion*
