@@ -552,3 +552,121 @@ export function getTotalPoolVolume(campaignId: string): {
     participant_count: participantCount,
   };
 }
+
+/**
+ * Get total effective pool volume for a campaign (with multipliers applied)
+ * This is the denominator for calculating reward shares:
+ * - Non-facilitator volume counts as 1x
+ * - Facilitator-owned volume counts as multiplier (e.g., 2x)
+ *
+ * @param campaignId - The campaign ID
+ * @param facilitatorMultiplier - The multiplier for facilitator owners (from campaign)
+ * @returns Total effective volume and participant count
+ */
+export function getTotalEffectivePoolVolume(
+  campaignId: string,
+  facilitatorMultiplier: number
+): {
+  total_effective_volume: string;
+  raw_volume: string;
+  participant_count: number;
+} {
+  const db = getDatabase();
+
+  // Get snapshot totals split by type (facilitator vs non-facilitator)
+  const snapshotStmt = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN ra.chain_type = 'facilitator' THEN CAST(vs.volume AS INTEGER) ELSE 0 END), 0) as facilitator_volume,
+      COALESCE(SUM(CASE WHEN ra.chain_type != 'facilitator' THEN CAST(vs.volume AS INTEGER) ELSE 0 END), 0) as address_volume,
+      COUNT(DISTINCT ra.user_id) as participant_count
+    FROM volume_snapshots vs
+    JOIN reward_addresses ra ON vs.reward_address_id = ra.id
+    WHERE vs.campaign_id = ?
+  `);
+  const snapshotData = snapshotStmt.get(campaignId) as {
+    facilitator_volume: number;
+    address_volume: number;
+    participant_count: number;
+  };
+
+  // Get the most recent snapshot date for this campaign
+  const lastSnapshotStmt = db.prepare(`
+    SELECT MAX(snapshot_date) as last_date
+    FROM volume_snapshots
+    WHERE campaign_id = ?
+  `);
+  const lastSnapshotResult = lastSnapshotStmt.get(campaignId) as {
+    last_date: string | null;
+  };
+  const lastSnapshotDate = lastSnapshotResult.last_date || '1970-01-01';
+
+  // Get live volume from verified addresses (since last snapshot) - no multiplier
+  const liveAddressStmt = db.prepare(`
+    SELECT
+      COALESCE(SUM(CAST(t.amount AS INTEGER)), 0) as volume,
+      COUNT(DISTINCT ra.user_id) as new_participants
+    FROM transactions t
+    JOIN reward_addresses ra ON ra.address = t.to_address
+    WHERE ra.verification_status = 'verified'
+      AND ra.chain_type != 'facilitator'
+      AND t.type = 'settle'
+      AND t.status = 'success'
+      AND t.from_address != t.to_address
+      AND t.created_at > ?
+      AND t.created_at >= ra.created_at
+  `);
+  const liveAddressResult = liveAddressStmt.get(lastSnapshotDate) as {
+    volume: number;
+    new_participants: number;
+  };
+
+  // Get live volume from facilitator ownership (since last snapshot) - gets multiplier
+  const liveFacilitatorStmt = db.prepare(`
+    SELECT
+      COALESCE(SUM(CAST(t.amount AS INTEGER)), 0) as volume
+    FROM transactions t
+    JOIN facilitators f ON f.id = t.facilitator_id
+    JOIN reward_addresses ra ON LOWER(ra.user_id) = f.owner_address
+    WHERE ra.verification_status = 'verified'
+      AND ra.chain_type = 'facilitator'
+      AND t.type = 'settle'
+      AND t.status = 'success'
+      AND t.from_address != t.to_address
+      AND t.created_at > ?
+      AND t.created_at >= ra.created_at
+  `);
+  const liveFacilitatorResult = liveFacilitatorStmt.get(lastSnapshotDate) as {
+    volume: number;
+  };
+
+  // Calculate raw volume (for reference)
+  const rawVolume =
+    BigInt(snapshotData.facilitator_volume) +
+    BigInt(snapshotData.address_volume) +
+    BigInt(liveAddressResult.volume) +
+    BigInt(liveFacilitatorResult.volume);
+
+  // Calculate effective volume (with multiplier applied to facilitator volume)
+  const totalFacilitatorVolume =
+    BigInt(snapshotData.facilitator_volume) + BigInt(liveFacilitatorResult.volume);
+  const totalAddressVolume =
+    BigInt(snapshotData.address_volume) + BigInt(liveAddressResult.volume);
+
+  // Apply multiplier to facilitator volume
+  const effectiveFacilitatorVolume =
+    (totalFacilitatorVolume * BigInt(Math.round(facilitatorMultiplier * 1000))) / BigInt(1000);
+
+  const totalEffectiveVolume = effectiveFacilitatorVolume + totalAddressVolume;
+
+  // Participant count
+  const participantCount = Math.max(
+    snapshotData.participant_count,
+    liveAddressResult.new_participants
+  );
+
+  return {
+    total_effective_volume: totalEffectiveVolume.toString(),
+    raw_volume: rawVolume.toString(),
+    participant_count: participantCount,
+  };
+}

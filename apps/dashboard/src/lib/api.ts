@@ -1294,6 +1294,17 @@ class ApiClient {
     return this.request(`/api/rewards/volume/breakdown?campaignId=${campaignId}`);
   }
 
+  async getFacilitatorVolume(facilitatorId: string, campaignId: string): Promise<{
+    facilitatorId: string;
+    campaignId: string;
+    volume: string;
+    uniquePayers: number;
+    enrolled: boolean;
+    enrolledAt?: string;
+  }> {
+    return this.request(`/api/rewards/volume/facilitator/${facilitatorId}?campaignId=${campaignId}`);
+  }
+
   // Claim endpoints
   async initiateClaim(
     claimId: string,

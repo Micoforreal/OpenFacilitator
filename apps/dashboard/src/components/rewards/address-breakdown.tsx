@@ -232,9 +232,13 @@ function PayToAddressesCard({
 export function AddressBreakdown({ addresses, totalVolume, onEnrollClick }: AddressBreakdownProps) {
   const totalVolumeNum = Number(totalVolume);
 
-  // Split addresses by type
-  const facilitators = addresses.filter((a) => a.chain_type === 'facilitator');
-  const payToAddresses = addresses.filter((a) => a.chain_type !== 'facilitator');
+  // Split addresses by type and sort by volume descending
+  const facilitators = addresses
+    .filter((a) => a.chain_type === 'facilitator')
+    .sort((a, b) => Number(b.volume) - Number(a.volume));
+  const payToAddresses = addresses
+    .filter((a) => a.chain_type !== 'facilitator')
+    .sort((a, b) => Number(b.volume) - Number(a.volume));
 
   return (
     <div className="space-y-4">

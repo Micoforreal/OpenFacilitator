@@ -66,8 +66,10 @@ export function ProgressDashboard({
   const remainingToThreshold = Math.max(0, thresholdNum - userVolumeNum);
 
   // Calculate user's share only if there's pool volume
+  // Cap at 10% of pool - no single user can claim more than 1/10th
   const userShare = totalVolumeNum > 0 ? effectiveVolume / totalVolumeNum : 0;
-  const estimatedReward = userShare * poolAmountNum;
+  const maxReward = poolAmountNum / 10;
+  const estimatedReward = Math.min(userShare * poolAmountNum, maxReward);
 
   // Check eligibility and create claim record when campaign has ended
   useEffect(() => {

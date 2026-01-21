@@ -71,40 +71,6 @@ export function RewardsInfoBanner() {
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Your facilitator volume is being tracked automatically.
-          </p>
-
-          {/* Optionally show additional pay-to addresses if any */}
-          {addresses.length > 0 && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpanded(!expanded)}
-                className="mt-2 -ml-2"
-              >
-                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                <span className="ml-1">{addresses.length} additional address{addresses.length !== 1 ? 'es' : ''}</span>
-              </Button>
-
-              {expanded && (
-                <div className="mt-4 pt-4 border-t border-primary/10">
-                  <AddressList
-                    addresses={addresses}
-                    onAddAddress={() => setEnrollmentOpen(true)}
-                    onAddressRemoved={handleAddressRemoved}
-                    onVerify={() => setEnrollmentOpen(true)}
-                  />
-                </div>
-              )}
-
-              <EnrollmentModal
-                open={enrollmentOpen}
-                onOpenChange={handleEnrollmentClose}
-              />
-            </>
-          )}
         </div>
       );
     }

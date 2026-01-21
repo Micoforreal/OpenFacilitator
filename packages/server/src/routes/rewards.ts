@@ -361,6 +361,69 @@ router.get('/volume/breakdown', requireAuth, async (req: Request, res: Response)
   }
 });
 
+/**
+ * GET /volume/facilitator/:facilitatorId
+ * Get volume for a specific facilitator
+ * Returns the volume processed through this facilitator since enrollment
+ */
+router.get('/volume/facilitator/:facilitatorId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { facilitatorId } = req.params;
+    const campaignId = req.query.campaignId as string;
+
+    if (!campaignId) {
+      res.status(400).json({
+        error: 'Validation error',
+        message: 'campaignId query parameter is required',
+      });
+      return;
+    }
+
+    // Get enrollment date for this user (when they enrolled in rewards)
+    const db = getDatabase();
+    const enrollmentStmt = db.prepare(`
+      SELECT ra.created_at
+      FROM reward_addresses ra
+      WHERE ra.user_id = ?
+        AND ra.verification_status = 'verified'
+        AND ra.chain_type = 'facilitator'
+      LIMIT 1
+    `);
+    const enrollment = enrollmentStmt.get(userId) as { created_at: string } | undefined;
+
+    if (!enrollment) {
+      res.json({
+        facilitatorId,
+        campaignId,
+        volume: '0',
+        uniquePayers: 0,
+        enrolled: false,
+      });
+      return;
+    }
+
+    // Import the function dynamically to avoid circular dependency
+    const { getVolumeByFacilitator } = await import('../db/volume-aggregation.js');
+    const volumeData = getVolumeByFacilitator(facilitatorId, enrollment.created_at);
+
+    res.json({
+      facilitatorId,
+      campaignId,
+      volume: volumeData.volume,
+      uniquePayers: volumeData.unique_payers,
+      enrolled: true,
+      enrolledAt: enrollment.created_at,
+    });
+  } catch (error) {
+    console.error('Error getting facilitator volume:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get facilitator volume',
+    });
+  }
+});
+
 // ============================================================================
 // Campaign API Routes
 // ============================================================================
