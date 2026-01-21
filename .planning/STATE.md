@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-20)
 
 **Core value:** Users who process volume through OpenFacilitator get rewarded with $OPEN tokens
-**Current focus:** v1.1 SDK & Docs - Phase 15
+**Current focus:** v1.1 SDK & Docs - Phase 16
 
 ## Current Position
 
 Milestone: v1.1 SDK & Docs
-Phase: 15 of 16 (Refund Documentation)
+Phase: 16 of 16 (Investigate Whitelabel Volume Tracking)
 Plan: 1 of 1 complete
 Status: Phase complete
-Last activity: 2026-01-21 — Completed 15-01-PLAN.md
+Last activity: 2026-01-21 - Completed 16-01-PLAN.md
 
-Progress: [##############......] 90% (v1.0 + Phases 12-15 complete)
+Progress: [####################] 100% (v1.0 + Phases 12-16 complete)
 
 ## Performance Metrics
 
@@ -26,10 +26,10 @@ Progress: [##############......] 90% (v1.0 + Phases 12-15 complete)
 - Phases: 11
 
 **v1.1:**
-- Plans completed: 4
-- Average duration: 2m 28s
-- Total execution time: 9m 50s
-- Phases: 4 (Phases 12-15 complete)
+- Plans completed: 5
+- Average duration: 2m 58s
+- Total execution time: 14m 50s
+- Phases: 5 (Phases 12-16 complete)
 
 ## Accumulated Context
 
@@ -63,8 +63,15 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Middleware-first docs: honoPaymentMiddleware/createPaymentMiddleware with refundProtection config
 - Tab navigation (Hono/Express/Manual) via new CodeTabs component
 - facilitatorUrl now optional in middleware - defaults to facilitator URL
-- Route renamed /claims/setup → /refunds/setup for URL consistency
+- Route renamed /claims/setup -> /refunds/setup for URL consistency
 - Simplified setup page copy (removed x402 link - users already know)
+
+**Phase 16 (Whitelabel Volume Tracking):**
+- Enrollment markers use reward_addresses with chain_type='facilitator'
+- Deterministic address format: FACILITATOR_OWNER:{userId}
+- User existence check before marker creation prevents FK constraint errors
+- Backfill runs on database initialization after tables are created
+- initializeDatabase made async to support backfill
 
 ### Pending Todos
 
@@ -80,5 +87,5 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 15-01-PLAN.md (Refund Documentation)
-Resume with: `/gsd:discuss-phase 16` or `/gsd:plan-phase 16`
+Stopped at: Completed 16-01-PLAN.md (Whitelabel Volume Tracking Fix)
+Resume with: Next milestone planning
