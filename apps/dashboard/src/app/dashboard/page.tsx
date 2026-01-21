@@ -20,6 +20,7 @@ import { CreateFacilitatorModal } from '@/components/create-facilitator-modal';
 import { BillingSection } from '@/components/billing-section';
 import { EmptyState } from '@/components/empty-state';
 import { RewardsInfoBanner } from '@/components/rewards-info-banner';
+import { FeaturesSpotlight } from '@/components/dashboard/FeaturesSpotlight';
 
 const FREE_ENDPOINT = 'https://pay.openfacilitator.io';
 
@@ -66,7 +67,7 @@ function FreeEndpointSection() {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, isEnrolled } = useAuth();
   const queryClient = useQueryClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -177,6 +178,14 @@ export default function DashboardPage() {
             <EmptyState onCreateClick={() => setIsCreateOpen(true)} />
           </div>
         )}
+
+        {/* Features Spotlight */}
+        <FeaturesSpotlight
+          hasFacilitators={!!hasFacilitators}
+          isEnrolled={isEnrolled}
+          firstFacilitatorId={facilitators?.[0]?.id}
+          onCreateFacilitator={() => setIsCreateOpen(true)}
+        />
 
         {/* Shared Facilitator Option */}
         <div className="mb-12">
