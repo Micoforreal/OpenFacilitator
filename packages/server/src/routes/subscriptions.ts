@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   createSubscription,
   getActiveSubscription,
+  getSubscriptionsByUserId,
   extendSubscription,
   SUBSCRIPTION_PRICING,
   type SubscriptionTier,
@@ -60,6 +61,35 @@ router.get('/pricing', (_req: Request, res: Response) => {
       period: '30 days',
     },
   });
+});
+
+/**
+ * GET /api/subscriptions/history
+ * Get subscription payment history for authenticated user
+ * Returns all subscription payments (including expired subscriptions)
+ */
+router.get('/history', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    const subscriptions = getSubscriptionsByUserId(userId);
+
+    // Transform to payment history format
+    const payments = subscriptions.map((sub) => ({
+      id: sub.id,
+      date: sub.created_at,
+      amount: (sub.amount / 1_000_000).toFixed(2), // Convert from USDC decimals
+      chain: 'solana', // Currently all subscriptions are on Solana
+      txHash: sub.tx_hash,
+      tier: sub.tier,
+      expiresAt: sub.expires_at,
+    }));
+
+    res.json({ payments });
+  } catch (error) {
+    console.error('Get subscription history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Validation schema for purchase endpoint (tier is optional, defaults to starter)

@@ -1,3 +1,10 @@
+/**
+ * ARCHIVED: 2026-01-22
+ * Reason: Legacy embedded wallet UI removed from header in Phase 17
+ * Note: Preserved for reference - wallet functionality moves to Subscriptions page
+ * See: Phase 18 will implement multi-chain wallets in Subscriptions section
+ */
+
 'use client';
 
 import { useState } from 'react';
