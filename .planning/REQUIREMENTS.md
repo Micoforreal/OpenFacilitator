@@ -30,9 +30,9 @@ Requirements for Subscription Wallet Overhaul milestone.
 
 ### Chain Preference
 
-- [ ] **PREF-01**: Chain preference defaults based on initial payment chain
-- [ ] **PREF-02**: Prominent preference toggle in Subscriptions section
-- [ ] **PREF-03**: Fallback logic checks alternate chain if preferred is insufficient
+- [x] **PREF-01**: Chain preference defaults based on initial payment chain
+- [x] **PREF-02**: Prominent preference toggle in Subscriptions section
+- [x] **PREF-03**: Fallback logic checks alternate chain if preferred is insufficient
 
 ### Recurring Payment Engine
 
@@ -92,9 +92,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WALL-02 | Phase 18 | Complete |
 | WALL-03 | Phase 18 | Complete |
 | WALL-04 | Phase 18 | Complete |
-| PREF-01 | Phase 19 | Pending |
-| PREF-02 | Phase 19 | Pending |
-| PREF-03 | Phase 19 | Pending |
+| PREF-01 | Phase 19 | Complete |
+| PREF-02 | Phase 19 | Complete |
+| PREF-03 | Phase 19 | Complete |
 | RECR-01 | Phase 20 | Pending |
 | RECR-02 | Phase 20 | Pending |
 | RECR-03 | Phase 20 | Pending |

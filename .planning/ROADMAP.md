@@ -85,8 +85,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 19-01-PLAN.md — Backend preference storage, API endpoints, default calculation
-- [ ] 19-02-PLAN.md — Toggle UI with optimistic updates, WalletCards integration
+- [x] 19-01-PLAN.md — Backend preference storage, API endpoints, default calculation
+- [x] 19-02-PLAN.md — Toggle UI with optimistic updates, WalletCards integration
 
 **Success Criteria:**
 
@@ -137,7 +137,7 @@ Plans:
 |-------|------|--------------|--------|
 | 17 | UI Cleanup & Subscriptions Section | 8 | Complete |
 | 18 | Multi-Chain Wallet Infrastructure | 4 | Complete |
-| 19 | Chain Preference Logic | 3 | Pending |
+| 19 | Chain Preference Logic | 3 | Complete |
 | 20 | Recurring Payment Engine | 6 | Pending |
 | 21 | Notifications & Edge Cases | 4 | Pending |
 
@@ -145,4 +145,4 @@ Plans:
 
 ---
 *Roadmap created: 2026-01-22*
-*Last updated: 2026-01-22 — Phase 19 planned*
+*Last updated: 2026-01-22 — Phase 19 complete*
