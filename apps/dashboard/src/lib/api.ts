@@ -220,6 +220,20 @@ export interface SubscriptionStatus {
   expires: string | null;
 }
 
+export interface SubscriptionPayment {
+  id: string;
+  date: string;
+  amount: string;
+  chain: string;
+  txHash: string | null;
+  tier: string;
+  expiresAt: string;
+}
+
+export interface SubscriptionHistoryResponse {
+  payments: SubscriptionPayment[];
+}
+
 export interface SubscriptionPricing {
   starter: { price: number; priceFormatted: string; currency: string; period: string };
 }
@@ -859,6 +873,10 @@ class ApiClient {
     }
 
     return data;
+  }
+
+  async getSubscriptionHistory(): Promise<SubscriptionHistoryResponse> {
+    return this.request('/api/subscriptions/history');
   }
 
   // Products (x402 resources)
