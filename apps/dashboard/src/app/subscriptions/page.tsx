@@ -8,6 +8,7 @@ import { Navbar } from '@/components/navbar';
 import { StatusCard } from '@/components/subscriptions/status-card';
 import { BillingCard } from '@/components/subscriptions/billing-card';
 import { PaymentHistory } from '@/components/subscriptions/payment-history';
+import { WalletCards } from '@/components/subscriptions/wallet-cards';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
@@ -108,6 +109,15 @@ export default function SubscriptionsPage() {
             isSubscribing={purchaseMutation.isPending}
           />
           <BillingCard subscription={subscription} />
+        </div>
+
+        {/* Wallet Cards Section */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Subscription Wallets</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Fund these wallets with USDC to pay for your subscription. You can use either chain.
+          </p>
+          <WalletCards />
         </div>
 
         {/* Payment History */}

@@ -52,7 +52,7 @@ export function BillingCard({ subscription }: BillingCardProps) {
 
         {/* Payment Method Note */}
         <p className="text-xs text-muted-foreground pt-2 border-t">
-          Payments are processed from your subscription wallet in USDC on Solana.
+          Payments are processed from your subscription wallets in USDC.
         </p>
       </CardContent>
     </Card>
