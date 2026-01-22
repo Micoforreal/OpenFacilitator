@@ -111,7 +111,15 @@ import {
   isRailwayConfigured 
 } from '../services/railway.js';
 import { encryptPrivateKey, decryptPrivateKey, generateWallet } from '../utils/crypto.js';
-import { generateWalletForUser, getWalletForUser, getUSDCBalance } from '../services/wallet.js';
+import {
+  generateWalletForUser,
+  generateBaseWalletForUser,
+  getWalletForUser,
+  getWalletForUserByNetwork,
+  getAllWalletsForUser,
+  getUSDCBalance,
+  getBaseUSDCBalance,
+} from '../services/wallet.js';
 import { generateWebhookSecret, deliverWebhook } from '../services/webhook.js';
 import type { Hex } from 'viem';
 
@@ -220,6 +228,159 @@ router.post('/wallet/create', requireAuth, async (req: Request, res: Response) =
   } catch (error) {
     console.error('Create wallet error:', error);
     res.status(500).json({ error: 'Failed to create wallet' });
+  }
+});
+
+/**
+ * GET /api/admin/wallets - Get all user wallets with balances
+ */
+router.get('/wallets', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const wallets = getAllWalletsForUser(req.user!.id);
+
+    // Fetch balance for each wallet
+    const walletsWithBalances = await Promise.all(
+      wallets.map(async (wallet) => {
+        try {
+          const { formatted } =
+            wallet.network === 'base'
+              ? await getBaseUSDCBalance(wallet.address)
+              : await getUSDCBalance(wallet.address);
+
+          return {
+            network: wallet.network as 'solana' | 'base',
+            address: wallet.address,
+            balance: formatted,
+            token: 'USDC',
+          };
+        } catch (error) {
+          console.error(`Error fetching balance for ${wallet.network} wallet:`, error);
+          return {
+            network: wallet.network as 'solana' | 'base',
+            address: wallet.address,
+            balance: '0.00',
+            token: 'USDC',
+          };
+        }
+      })
+    );
+
+    res.json(walletsWithBalances);
+  } catch (error) {
+    console.error('Get wallets error:', error);
+    res.status(500).json({ error: 'Failed to get wallets' });
+  }
+});
+
+/**
+ * GET /api/admin/wallets/:chain - Get specific wallet by chain
+ * chain = 'solana' | 'base'
+ */
+router.get('/wallets/:chain', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { chain } = req.params;
+
+    // Validate chain parameter
+    if (chain !== 'solana' && chain !== 'base') {
+      res.status(400).json({ error: 'Invalid chain. Must be "solana" or "base".' });
+      return;
+    }
+
+    const wallet = getWalletForUserByNetwork(req.user!.id, chain);
+    if (!wallet) {
+      res.status(404).json({
+        error: `No ${chain} wallet found`,
+        hasWallet: false,
+        network: chain,
+      });
+      return;
+    }
+
+    const { formatted } =
+      chain === 'base'
+        ? await getBaseUSDCBalance(wallet.address)
+        : await getUSDCBalance(wallet.address);
+
+    res.json({
+      network: chain as 'solana' | 'base',
+      address: wallet.address,
+      balance: formatted,
+      token: 'USDC',
+    });
+  } catch (error) {
+    console.error('Get wallet by chain error:', error);
+    res.status(500).json({ error: 'Failed to get wallet' });
+  }
+});
+
+/**
+ * POST /api/admin/wallets/:chain/create - Create wallet for specific chain
+ * chain = 'solana' | 'base'
+ */
+router.post('/wallets/:chain/create', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { chain } = req.params;
+
+    // Validate chain parameter
+    if (chain !== 'solana' && chain !== 'base') {
+      res.status(400).json({ error: 'Invalid chain. Must be "solana" or "base".' });
+      return;
+    }
+
+    const result =
+      chain === 'base'
+        ? await generateBaseWalletForUser(req.user!.id)
+        : await generateWalletForUser(req.user!.id);
+
+    res.json({
+      address: result.address,
+      network: chain,
+      created: result.created,
+      message: result.created
+        ? `${chain.charAt(0).toUpperCase() + chain.slice(1)} wallet created successfully. Fund this address with USDC.`
+        : `${chain.charAt(0).toUpperCase() + chain.slice(1)} wallet already exists.`,
+    });
+  } catch (error) {
+    console.error('Create wallet error:', error);
+    res.status(500).json({ error: 'Failed to create wallet' });
+  }
+});
+
+/**
+ * GET /api/admin/wallets/:chain/balance - Refresh balance for specific wallet
+ */
+router.get('/wallets/:chain/balance', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { chain } = req.params;
+
+    // Validate chain parameter
+    if (chain !== 'solana' && chain !== 'base') {
+      res.status(400).json({ error: 'Invalid chain. Must be "solana" or "base".' });
+      return;
+    }
+
+    const wallet = getWalletForUserByNetwork(req.user!.id, chain);
+    if (!wallet) {
+      res.status(404).json({
+        error: `No ${chain} wallet found`,
+        hasWallet: false,
+        network: chain,
+      });
+      return;
+    }
+
+    const { formatted } =
+      chain === 'base'
+        ? await getBaseUSDCBalance(wallet.address)
+        : await getUSDCBalance(wallet.address);
+
+    res.json({
+      balance: formatted,
+      token: 'USDC',
+    });
+  } catch (error) {
+    console.error('Get wallet balance error:', error);
+    res.status(500).json({ error: 'Failed to get balance' });
   }
 });
 

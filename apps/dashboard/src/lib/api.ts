@@ -214,6 +214,25 @@ export interface BillingWalletCreateResponse {
   message: string;
 }
 
+export interface SubscriptionWallet {
+  network: 'solana' | 'base';
+  address: string;
+  balance: string;
+  token: string;
+}
+
+export interface SubscriptionWalletCreateResponse {
+  address: string;
+  network: string;
+  created: boolean;
+  message: string;
+}
+
+export interface WalletBalanceResponse {
+  balance: string;
+  token: string;
+}
+
 export interface SubscriptionStatus {
   active: boolean;
   tier: 'starter' | 'basic' | 'pro' | null; // 'basic' and 'pro' for backwards compatibility
@@ -825,7 +844,7 @@ class ApiClient {
     });
   }
 
-  // Billing Wallet (user's subscription wallet)
+  // Billing Wallet (user's subscription wallet) - legacy single wallet
   async getBillingWallet(): Promise<BillingWallet> {
     return this.request('/api/admin/wallet');
   }
@@ -834,6 +853,29 @@ class ApiClient {
     return this.request('/api/admin/wallet/create', {
       method: 'POST',
     });
+  }
+
+  // Multi-chain Subscription Wallets
+  async getSubscriptionWallets(): Promise<SubscriptionWallet[]> {
+    return this.request('/api/admin/wallets');
+  }
+
+  async getSubscriptionWallet(chain: 'solana' | 'base'): Promise<SubscriptionWallet | null> {
+    try {
+      return await this.request(`/api/admin/wallets/${chain}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async createSubscriptionWallet(chain: 'solana' | 'base'): Promise<SubscriptionWalletCreateResponse> {
+    return this.request(`/api/admin/wallets/${chain}/create`, {
+      method: 'POST',
+    });
+  }
+
+  async refreshWalletBalance(chain: 'solana' | 'base'): Promise<WalletBalanceResponse> {
+    return this.request(`/api/admin/wallets/${chain}/balance`);
   }
 
   // Subscription Management
