@@ -2,22 +2,21 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-22)
+See: .planning/PROJECT.md (updated 2026-01-23)
 
 **Core value:** Users who process volume through OpenFacilitator get rewarded with $OPEN tokens. Facilitator owners get seamless subscription management with multi-chain support.
-**Current focus:** Milestone v1.2 complete — ready for next milestone
+**Current focus:** Between milestones — ready for v1.3 planning
 
 ## Current Position
 
-Milestone: v1.2 Subscription Wallet Overhaul
-Phase: 21 - Notifications & Edge Cases
-Plan: 2 of 2 complete
-Status: Milestone complete
-Last activity: 2026-01-23 — Completed Phase 21, milestone verified
+Milestone: v1.2 Subscription Wallet Overhaul (SHIPPED)
+Phase: 21 of 21 complete
+Status: Milestone archived
+Last activity: 2026-01-23 — v1.2 milestone completed and archived
 
-Progress: [████████████████████] 100%
+Progress: [████████████████████] 100% (v1.2 complete)
 
-## Phase Summary
+## Phase Summary (v1.2)
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
@@ -59,49 +58,12 @@ Progress: [████████████████████] 100%
 All milestones archived:
 - v1.0 MVP: milestones/v1.0-ROADMAP.md
 - v1.1 SDK & Docs: milestones/v1.1-ROADMAP.md
-- v1.2 Subscription Wallet Overhaul: .planning/ROADMAP.md (active)
+- v1.2 Subscription Wallet Overhaul: milestones/v1.2-ROADMAP.md
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full history.
-v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
-v1.1 decisions archived in milestones/v1.1-ROADMAP.md.
-
-v1.2 decisions:
-- Show wallet addresses directly (power user friendly)
-- 7-day grace period (industry standard)
-- Pre-fund any amount (user flexibility)
-- No mid-cycle refunds (simplicity)
-- Prominent chain preference toggle (discoverability)
-- Four subscription states: active (green), pending (amber), inactive (red), never (gray)
-- Grace period detection (7 days) for pending state
-- Side-by-side wallet cards (Base first, Solana second)
-- Manual balance refresh only (no auto-polling)
-- Chain logo letter fallback (no image assets needed)
-- Default preference calculation: payment history > wallet balance > solana
-- Blue for Base toggle, purple for Solana toggle (chain branding)
-- Toggle disabled when both wallets don't exist (clear UX)
-- Optimistic UI updates with rollback on error (responsive feel)
-- Log all payment attempts (not just successes) for debugging and retry logic
-- is_fallback flag tracks when payment used alternate chain
-- Subscription extension only after successful payment
-- 7-day grace period starts immediately when subscription expires
-- Billing cron uses x-cron-secret header (matches rewards.ts pattern)
-- State field added to status response (active/pending/inactive/never)
-- Instant reactivation only available during grace period window
-- CSV export uses client-side generation (no server endpoint needed)
-- Grace period urgency changes to red at 2 days remaining
-- Payment attempt type distinct from subscription record type
-- Separate makeBaseX402Payment function instead of unified handler (clear separation of Solana vs EVM logic)
-- Transaction signing happens client-side before x402 payload submission
-- NotificationType enum: payment_success, payment_failed, low_balance, expiration_reminder, subscription_restored, subscription_expired
-- NotificationSeverity: success (green), warning (amber), error (red), info (neutral)
-- Low balance threshold: $10 (2x subscription cost)
-- Duplicate notification prevention: 24h for low_balance, 72h for expiration_reminder
-- Expiration reminders sent 3 days before subscription expires
-- Manual popover component creation following existing shadcn pattern (project lacks components.json)
-- Notification badge shows 99+ when unread count exceeds 99
-- 30-second stale time for notifications query
+All milestone decisions archived in respective milestones/*.md files.
 
 ### Pending Todos
 
@@ -115,10 +77,9 @@ v1.2 decisions:
 
 - **Pre-Launch:** Rewards wallet must be funded before claims go live (March 2026)
 - **Pre-Launch:** CRON_SECRET env var for volume snapshot cron jobs AND subscription billing cron
-- **Pre-Launch:** External cron scheduler needed for daily billing (midnight UTC)
 
 ## Session Continuity
 
 Last session: 2026-01-23
-Stopped at: Milestone v1.2 complete, all phases verified
-Resume with: `/gsd:audit-milestone` or `/gsd:new-milestone`
+Stopped at: Milestone v1.2 archived, ready for next milestone
+Resume with: `/gsd:new-milestone`
