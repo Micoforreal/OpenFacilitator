@@ -36,11 +36,19 @@ const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const;
 interface PaymentRequirements {
   scheme: string;
   network: string;
-  maxAmountRequired: string;
+  /** v1 field */
+  maxAmountRequired?: string;
+  /** v2 field */
+  amount?: string;
   asset: string;
   payTo?: string;
   description?: string;
   extra?: Record<string, unknown>;
+}
+
+/** Get the amount from payment requirements (v1 or v2 format) */
+function getRequiredAmount(requirements: PaymentRequirements): string {
+  return requirements.maxAmountRequired ?? requirements.amount ?? '0';
 }
 
 interface X402Response {
@@ -75,8 +83,8 @@ function parse402Response(body: unknown): PaymentRequirements | null {
   const data = body as Record<string, unknown>;
 
   // Handle different 402 response formats
-  // Format 1: Direct requirements object
-  if (data.network && data.maxAmountRequired) {
+  // Format 1: Direct requirements object (v1 uses maxAmountRequired, v2 uses amount)
+  if (data.network && (data.maxAmountRequired || data.amount)) {
     return data as unknown as PaymentRequirements;
   }
 
@@ -370,7 +378,7 @@ export async function makeX402Payment(
 
     // Step 3: Check balance
     const network = requirements.network || 'solana';
-    const requiredAmount = BigInt(requirements.maxAmountRequired);
+    const requiredAmount = BigInt(getRequiredAmount(requirements));
     const balance = await getUSDCBalance(walletAddress, network);
 
     console.log('[x402Client] Balance check:', {
@@ -521,7 +529,7 @@ export async function makeBaseX402Payment(
     }
 
     // Step 3: Check balance
-    const requiredAmount = BigInt(requirements.maxAmountRequired);
+    const requiredAmount = BigInt(getRequiredAmount(requirements));
     const balance = await getBaseUSDCBalance(walletAddress);
 
     console.log('[x402Client] Balance check:', {

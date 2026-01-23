@@ -77,18 +77,32 @@ export interface VerifyRequest {
 }
 
 /**
- * Payment requirements from the resource server
+ * Payment requirements from the resource server.
+ * Supports both x402 v1 (maxAmountRequired) and v2 (amount) formats.
  */
 export interface PaymentRequirements {
   scheme: string;
   network: string;
-  maxAmountRequired: string;
-  resource: string;
+  /** v1 field - Amount required in base units */
+  maxAmountRequired?: string;
+  /** v2 field - Amount required in base units */
+  amount?: string;
+  resource?: string;
   asset: string; // Token contract address
+  payTo?: string; // Required in v2, optional in v1
   description?: string;
   mimeType?: string;
+  maxTimeoutSeconds?: number; // Required in v2
   outputSchema?: Record<string, unknown>;
   extra?: Record<string, unknown>;
+}
+
+/**
+ * Get the amount from payment requirements, supporting both v1 and v2 formats.
+ * v1 uses maxAmountRequired, v2 uses amount.
+ */
+export function getRequiredAmount(requirements: PaymentRequirements): string {
+  return requirements.maxAmountRequired ?? requirements.amount ?? '0';
 }
 
 /**

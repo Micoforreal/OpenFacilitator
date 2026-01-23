@@ -19,11 +19,14 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router: IRouter = Router();
 
-// Payment requirements schema (shared)
+// Payment requirements schema (shared) - supports both v1 and v2 formats
 const paymentRequirementsSchema = z.object({
   scheme: z.string(),
   network: z.string(),
-  maxAmountRequired: z.string(),
+  // v1 field (optional for v2 compatibility)
+  maxAmountRequired: z.string().optional(),
+  // v2 field (optional for v1 compatibility)
+  amount: z.string().optional(),
   resource: z.string().default(''),
   asset: z.string(),
   payTo: z.string().optional(),
@@ -32,7 +35,15 @@ const paymentRequirementsSchema = z.object({
   maxTimeoutSeconds: z.number().optional(),
   outputSchema: z.record(z.unknown()).optional(),
   extra: z.record(z.unknown()).optional(),
-});
+}).refine(
+  (data) => data.maxAmountRequired !== undefined || data.amount !== undefined,
+  { message: 'Either maxAmountRequired (v1) or amount (v2) must be provided', path: ['amount'] }
+);
+
+/** Get the amount from payment requirements (v1 or v2 format) */
+function getRequiredAmount(requirements: { maxAmountRequired?: string; amount?: string }): string {
+  return requirements.maxAmountRequired ?? requirements.amount ?? '0';
+}
 
 const verifyRequestSchema = z.object({
   x402Version: z.number().optional(),
@@ -238,7 +249,7 @@ router.post('/free/verify', async (req: Request, res: Response) => {
         network: paymentRequirements.network,
         from_address: result.payer,
         to_address: paymentRequirements.payTo || 'unknown',
-        amount: paymentRequirements.maxAmountRequired,
+        amount: getRequiredAmount(paymentRequirements),
         asset: paymentRequirements.asset,
         status: result.isValid ? 'success' : 'failed',
         error_message: result.invalidReason,
@@ -347,7 +358,7 @@ router.post('/free/settle', async (req: Request, res: Response) => {
       network: paymentRequirements.network,
       from_address: fromAddress,
       to_address: paymentRequirements.payTo || 'unknown',
-      amount: paymentRequirements.maxAmountRequired,
+      amount: getRequiredAmount(paymentRequirements),
       asset: paymentRequirements.asset,
       status: result.success ? 'pending' : 'failed',
       transaction_hash: result.transaction,

@@ -9,15 +9,16 @@ import {
   polygonAmoy,
   sepolia,
 } from 'viem/chains';
-import type {
-  FacilitatorConfig,
-  PaymentRequirements,
-  SettleResponse,
-  SupportedKind,
-  SupportedResponse,
-  VerifyResponse,
-  X402PaymentPayload,
-  ChainId,
+import {
+  getRequiredAmount,
+  type FacilitatorConfig,
+  type PaymentRequirements,
+  type SettleResponse,
+  type SupportedKind,
+  type SupportedResponse,
+  type VerifyResponse,
+  type X402PaymentPayload,
+  type ChainId,
 } from './types.js';
 import { getChainIdFromNetwork, getNetworkFromChainId, getCaip2FromNetwork, defaultChains } from './chains.js';
 import { executeERC3009Settlement } from './erc3009.js';
@@ -293,7 +294,7 @@ export class Facilitator {
 
         // Check amount meets requirements
         const paymentAmount = BigInt(authorization.value);
-        const requiredAmount = BigInt(requirements.maxAmountRequired);
+        const requiredAmount = BigInt(getRequiredAmount(requirements));
         if (paymentAmount < requiredAmount) {
           return {
             isValid: false,

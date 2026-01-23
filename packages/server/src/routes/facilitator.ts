@@ -80,11 +80,15 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   return cookies;
 }
 
-// Payment requirements schema (shared)
+// Payment requirements schema (shared) - supports both v1 and v2 formats
+// v1 uses maxAmountRequired, v2 uses amount
 const paymentRequirementsSchema = z.object({
   scheme: z.string(),
   network: z.string(),
-  maxAmountRequired: z.string(),
+  // v1 field (optional for v2 compatibility)
+  maxAmountRequired: z.string().optional(),
+  // v2 field (optional for v1 compatibility)
+  amount: z.string().optional(),
   resource: z.string().default(''),
   asset: z.string(), // Token contract address
   payTo: z.string().optional(),
@@ -93,7 +97,18 @@ const paymentRequirementsSchema = z.object({
   maxTimeoutSeconds: z.number().optional(),
   outputSchema: z.record(z.unknown()).optional(),
   extra: z.record(z.unknown()).optional(),
-});
+}).refine(
+  (data) => data.maxAmountRequired !== undefined || data.amount !== undefined,
+  { message: 'Either maxAmountRequired (v1) or amount (v2) must be provided', path: ['amount'] }
+);
+
+/**
+ * Get the amount from payment requirements, supporting both v1 and v2 formats.
+ * v1 uses maxAmountRequired, v2 uses amount.
+ */
+function getRequiredAmount(requirements: { maxAmountRequired?: string; amount?: string }): string {
+  return requirements.maxAmountRequired ?? requirements.amount ?? '0';
+}
 
 // Validation schemas - accept both string (base64) and object for paymentPayload
 const verifyRequestSchema = z.object({
@@ -434,7 +449,7 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
         network: paymentRequirements.network,
         from_address: result.payer,
         to_address: record.owner_address,
-        amount: paymentRequirements.maxAmountRequired,
+        amount: getRequiredAmount(paymentRequirements),
         asset: paymentRequirements.asset,
         status: result.isValid ? 'success' : 'failed',
         error_message: result.invalidReason,
@@ -576,7 +591,7 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
       network: paymentRequirements.network,
       from_address: fromAddress,
       to_address: record.owner_address,
-      amount: paymentRequirements.maxAmountRequired,
+      amount: getRequiredAmount(paymentRequirements),
       asset: paymentRequirements.asset,
       status: result.success ? 'pending' : 'failed',
       transaction_hash: result.transaction,
@@ -598,7 +613,7 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
             id: txRecord.id,
             fromAddress: fromAddress,
             toAddress: record.owner_address,
-            amount: paymentRequirements.maxAmountRequired,
+            amount: getRequiredAmount(paymentRequirements),
             asset: paymentRequirements.asset,
             network: paymentRequirements.network,
             transactionHash: result.transaction || null,
@@ -2683,10 +2698,12 @@ function generateProxyUrlPaymentPage(
         const deadline = Math.floor(Date.now() / 1000) + 3600;
         const nonce = '0x' + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
 
+        // Support both v1 (maxAmountRequired) and v2 (amount) formats
+        const paymentAmount = paymentRequirements.maxAmountRequired || paymentRequirements.amount;
         const authorization = {
           from: userAddress,
           to: paymentRequirements.payTo,
-          value: paymentRequirements.maxAmountRequired,
+          value: paymentAmount,
           validAfter: 0,
           validBefore: deadline,
           nonce: nonce
