@@ -23,5 +23,5 @@ const withMDX = createMDX({
   },
 });
 
-// @ts-expect-error - Next.js version mismatch between @next/mdx and next
+// @ts-ignore - Next.js version mismatch between @next/mdx and next (local only)
 export default withMDX(nextConfig);
