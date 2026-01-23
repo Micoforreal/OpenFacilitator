@@ -10,22 +10,22 @@ See: .planning/PROJECT.md (updated 2026-01-22)
 ## Current Position
 
 Milestone: v1.2 Subscription Wallet Overhaul
-Phase: 20 - Recurring Payment Engine
-Plan: 4 of 4 complete
-Status: Phase complete
-Last activity: 2026-01-22 — Completed 20-04-PLAN.md (gap closure)
+Phase: 21 - Notifications & Edge Cases
+Plan: 1 of 4 complete
+Status: In progress
+Last activity: 2026-01-23 — Completed 21-01-PLAN.md
 
-Progress: [████████████████░░░░] 74%
+Progress: [█████████████████░░░] 77%
 
 ## Phase Summary
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 17 | UI Cleanup & Subscriptions Section | 8 | Complete ✓ |
-| 18 | Multi-Chain Wallet Infrastructure | 4 | Complete ✓ |
-| 19 | Chain Preference Logic | 3 | Complete ✓ |
-| 20 | Recurring Payment Engine | 6 | Complete ✓ |
-| 21 | Notifications & Edge Cases | 4 | Pending |
+| 17 | UI Cleanup & Subscriptions Section | 8 | Complete |
+| 18 | Multi-Chain Wallet Infrastructure | 4 | Complete |
+| 19 | Chain Preference Logic | 3 | Complete |
+| 20 | Recurring Payment Engine | 6 | Complete |
+| 21 | Notifications & Edge Cases | 4 | In Progress (1/4) |
 
 ## Performance Metrics
 
@@ -42,14 +42,14 @@ Progress: [████████████████░░░░] 74%
 - Phases: 5 (Phases 12-16 complete)
 
 **v1.2 Velocity:**
-- Plans completed: 11
+- Plans completed: 12
 - Average duration: 3m 0s
-- Total execution time: 36m 48s
+- Total execution time: 39m 48s
 - Phases: 5 (Phases 17-21 planned)
 
 **Cumulative:**
-- Total plans: 35
-- Total phases: 21 (20 complete, 1 pending)
+- Total plans: 36
+- Total phases: 21 (20 complete, 1 in progress)
 - Milestones shipped: 2
 
 ## Accumulated Context
@@ -94,6 +94,11 @@ v1.2 decisions:
 - Payment attempt type distinct from subscription record type
 - Separate makeBaseX402Payment function instead of unified handler (clear separation of Solana vs EVM logic)
 - Transaction signing happens client-side before x402 payload submission
+- NotificationType enum: payment_success, payment_failed, low_balance, expiration_reminder, subscription_restored, subscription_expired
+- NotificationSeverity: success (green), warning (amber), error (red), info (neutral)
+- Low balance threshold: $10 (2x subscription cost)
+- Duplicate notification prevention: 24h for low_balance, 72h for expiration_reminder
+- Expiration reminders sent 3 days before subscription expires
 
 ### Pending Todos
 
@@ -111,6 +116,6 @@ v1.2 decisions:
 
 ## Session Continuity
 
-Last session: 2026-01-22
-Stopped at: Phase 20 verified and complete
-Resume with: `/gsd:discuss-phase 21`
+Last session: 2026-01-23
+Stopped at: Completed 21-01-PLAN.md
+Resume with: `/gsd:execute-phase 21 --plan 02`
