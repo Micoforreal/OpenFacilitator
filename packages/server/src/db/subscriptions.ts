@@ -245,3 +245,16 @@ export function getUserSubscriptionState(
 
   return 'never';
 }
+
+/**
+ * Get subscriptions expiring exactly N days from now
+ * Used for sending expiration reminders
+ */
+export function getSubscriptionsExpiringInDays(days: number): Subscription[] {
+  const db = getDatabase();
+  const stmt = db.prepare(`
+    SELECT * FROM subscriptions
+    WHERE date(expires_at) = date('now', '+' || ? || ' days')
+  `);
+  return stmt.all(days) as Subscription[];
+}

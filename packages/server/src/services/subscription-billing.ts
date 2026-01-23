@@ -17,6 +17,10 @@ import {
   extendSubscription,
 } from '../db/subscriptions.js';
 import { createSubscriptionPayment } from '../db/subscription-payments.js';
+import {
+  createNotification,
+  hasRecentNotificationOfType,
+} from '../db/notifications.js';
 
 // x402jobs payment endpoint
 const X402_JOBS_PAYMENT_URL =
@@ -116,6 +120,16 @@ export async function processSubscriptionPayment(userId: string): Promise<Paymen
     'Insufficient balance on both chains',
     null,
     false
+  );
+
+  // Create payment failed notification
+  createNotification(
+    userId,
+    'payment_failed',
+    'Payment Failed',
+    'Subscription payment failed due to insufficient funds on both chains. Please fund your wallet.',
+    'error',
+    { chain: preferredChain }
   );
 
   console.log(`[SubscriptionBilling] Insufficient balance on both chains`);
@@ -261,6 +275,34 @@ async function attemptPayment(
       subscriptionId,
       isFallback
     );
+
+    // Create payment success notification
+    createNotification(
+      userId,
+      'payment_success',
+      'Payment Successful',
+      `Your $5 subscription payment was processed successfully.`,
+      'success',
+      { txHash: paymentResult.txHash, chain, amount }
+    );
+
+    // Check balance after payment for low balance warning
+    const subscriptionCost = SUBSCRIPTION_PRICING.starter;
+    const lowBalanceThreshold = subscriptionCost * 2; // 2x = $10
+
+    if (balanceResult.balance < BigInt(lowBalanceThreshold)) {
+      // Only create if no recent low_balance notification in last 24h
+      if (!hasRecentNotificationOfType(userId, 'low_balance', 24)) {
+        createNotification(
+          userId,
+          'low_balance',
+          'Low Balance Warning',
+          `Your ${chain} wallet balance is below $10. Consider funding to avoid payment failures.`,
+          'warning',
+          { chain, balance: balanceResult.formatted }
+        );
+      }
+    }
 
     console.log(`[SubscriptionBilling] Payment successful, tx: ${paymentResult.txHash}`);
 

@@ -12,7 +12,12 @@ import {
   getUserSubscriptionState,
   isInGracePeriod,
   GRACE_PERIOD_DAYS,
+  getSubscriptionsExpiringInDays,
 } from '../db/subscriptions.js';
+import {
+  createNotification,
+  hasRecentNotificationOfType,
+} from '../db/notifications.js';
 import { getSubscriptionPaymentsByUser } from '../db/subscription-payments.js';
 import { getUserWalletByUserId } from '../db/user-wallets.js';
 import { decryptPrivateKey } from '../utils/crypto.js';
@@ -310,6 +315,28 @@ router.post('/billing', async (req: Request, res: Response) => {
 
     console.log('[Billing] Starting daily billing process');
 
+    // Send 3-day expiration reminders
+    const expiringIn3Days = getSubscriptionsExpiringInDays(3);
+    console.log(`[Billing] Found ${expiringIn3Days.length} subscriptions expiring in 3 days`);
+
+    for (const sub of expiringIn3Days) {
+      // Skip if already in grace period (shouldn't happen but be safe)
+      if (!isInGracePeriod(sub.user_id)) {
+        // Only create if no recent expiration_reminder in last 72h
+        if (!hasRecentNotificationOfType(sub.user_id, 'expiration_reminder', 72)) {
+          createNotification(
+            sub.user_id,
+            'expiration_reminder',
+            'Subscription Expiring Soon',
+            'Your subscription will expire in 3 days. Ensure your wallet is funded to avoid interruption.',
+            'warning',
+            { expiresAt: sub.expires_at }
+          );
+          console.log(`[Billing] Sent expiration reminder to user ${sub.user_id}`);
+        }
+      }
+    }
+
     // Get all subscriptions that are due for billing
     const dueSubscriptions = getDueSubscriptions();
     console.log(`[Billing] Found ${dueSubscriptions.length} due subscriptions`);
@@ -387,6 +414,16 @@ router.post('/reactivate', requireAuth, async (req: Request, res: Response) => {
 
       // Get updated subscription
       const subscription = getActiveSubscription(userId);
+
+      // Create subscription restored notification
+      createNotification(
+        userId,
+        'subscription_restored',
+        'Subscription Restored',
+        'Your subscription has been successfully reactivated!',
+        'success',
+        { tier: subscription?.tier, expires: subscription?.expires_at }
+      );
 
       res.json({
         success: true,
