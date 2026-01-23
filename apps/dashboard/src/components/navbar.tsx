@@ -7,6 +7,7 @@ import { Menu, X, Trophy } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/auth/auth-provider';
 import { UserMenu } from '@/components/user-menu';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
 
@@ -121,6 +122,7 @@ export function Navbar() {
             <div className="w-20 h-8 bg-muted rounded animate-pulse" />
           ) : isAuthenticated ? (
             <div className="flex items-center gap-2">
+              <NotificationBell />
               {isAdmin && (
                 <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                   Admin
@@ -187,6 +189,7 @@ export function Navbar() {
               ) : isAuthenticated ? (
                 <div className="px-3 py-3">
                   <div className="flex items-center gap-2">
+                    <NotificationBell />
                     {isAdmin && (
                       <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         Admin
